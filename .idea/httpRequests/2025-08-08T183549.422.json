@@ -1,0 +1,13 @@
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": [
+        "body",
+        "image"
+      ],
+      "msg": "Field required",
+      "input": null
+    }
+  ]
+}

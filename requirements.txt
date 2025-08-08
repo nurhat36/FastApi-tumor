@@ -4,4 +4,4 @@ pillow~=10.2.0
 tensorflow~=2.17.0
 fastapi~=0.116.1
 starlette~=0.47.2
-metrics
+metrics~=0.0.2
