@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from app.routers import segment
-
+from app.routers import auth, segment
+from app.database import Base, engine
 app = FastAPI(
     title="Segmentation API",
     description="Tümleşik model ile segmentasyon tahminleri yapar",
@@ -8,4 +8,7 @@ app = FastAPI(
 )
 
 # Router'ı dahil et
+Base.metadata.create_all(bind=engine)
+
+app.include_router(auth.router)
 app.include_router(segment.router)
