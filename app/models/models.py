@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, LargeBinary
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
@@ -18,8 +18,8 @@ class Mask(Base):
     __tablename__ = "masks"
 
     id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String(255), nullable=False)
-    mask_data = Column(LargeBinary, nullable=False)  # PNG binary
+    filename = Column(String(255), nullable=False)  # mask dosya adı
+    file_path = Column(String(255), nullable=False)  # dosya yolu (ör. 'static/masks/mask_123.png')
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner_id = Column(Integer, ForeignKey("users.id"))
