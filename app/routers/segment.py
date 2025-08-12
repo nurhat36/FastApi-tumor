@@ -72,3 +72,26 @@ async def predict_image(
     except Exception as e:
         print("HATA segment:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/my-masks")
+def get_my_segmented_images(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        masks = db.query(Mask).filter(Mask.owner_id == current_user.id).all()
+
+        results = []
+        for mask in masks:
+            results.append({
+                "mask_id": mask.id,
+                "filename": mask.filename,
+                "mask_url": f"/static/masks/{mask.filename}"
+            })
+
+        return JSONResponse(content=results)
+
+    except Exception as e:
+        print("HATA get_my_segmented_images:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
