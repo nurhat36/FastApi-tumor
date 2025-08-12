@@ -26,6 +26,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.refresh(user)
     return {"id": user.id, "username": user.username}
 
+
 @router.post("/token")
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
@@ -35,5 +36,15 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = create_access_token({"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+
+    # JWT payload içine hem username hem user_id ekleyelim
+    access_token = create_access_token({
+        "sub": user.username,
+        "user_id": user.id  # ID'yi ekliyoruz
+    })
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
