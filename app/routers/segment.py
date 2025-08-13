@@ -3,7 +3,7 @@ import io, time
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from multipart import file_path
 from starlette.responses import JSONResponse
-from PIL import Image
+from PIL import Image, ImageDraw
 import numpy as np
 import cv2
 from sqlalchemy.orm import Session
@@ -15,6 +15,7 @@ from app.models.models import Mask
 from app.utils.security import get_current_user
 from app.models.models import User
 
+
 router = APIRouter(tags=["segment"])
 
 # STATIC klasör yolu
@@ -24,14 +25,16 @@ STATIC_MASKS_DIR.mkdir(parents=True, exist_ok=True)  # klasör yoksa oluştur
 @router.post("/segment")
 async def predict_image(
     file: UploadFile = File(...),
+    x: int = 0,
+    y: int = 0,
+    width: int = 0,
+    height: int = 0,
+    shape: str = "rectangle",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        # Kullanıcı dosyayı yükledi -> oku
         contents = await file.read()
-
-        # Görseli grayscale olarak aç
         image = Image.open(io.BytesIO(contents)).convert("L")
         original_size = image.size
 
@@ -48,6 +51,19 @@ async def predict_image(
         # Orijinal boyuta döndür
         prediction_mask_resized = cv2.resize(prediction_mask, original_size)
 
+        # Seçilen alanı uygula
+        if width > 0 and height > 0:
+            mask = Image.new("L", original_size, 0)
+            draw = ImageDraw.Draw(mask)
+            if shape == "rectangle":
+                draw.rectangle([x, y, x + width, y + height], fill=255)
+            elif shape == "circle":
+                draw.ellipse([x, y, x + width, y + height], fill=255)
+            elif shape == "oval":
+                draw.ellipse([x, y, x + width, y + height], fill=255)
+            mask_np = np.array(mask)
+            prediction_mask_resized = cv2.bitwise_and(prediction_mask_resized, mask_np)
+
         # PNG olarak kaydet
         filename = f"mask_user{current_user.id}_{int(time.time())}.png"
         save_path = STATIC_MASKS_DIR / filename
@@ -55,14 +71,12 @@ async def predict_image(
         mask_image.save(save_path, format="PNG")
 
         # DB'ye kaydet
-        mask_record = Mask(filename=filename, owner_id=current_user.id,file_path=str(save_path))
+        mask_record = Mask(filename=filename, owner_id=current_user.id, file_path=str(save_path))
         db.add(mask_record)
         db.commit()
         db.refresh(mask_record)
 
-        # Mask URL
         mask_url = f"/static/masks/{filename}"
-
         return JSONResponse(content={
             "mask_id": mask_record.id,
             "filename": filename,
@@ -72,7 +86,6 @@ async def predict_image(
     except Exception as e:
         print("HATA segment:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/my-masks")
 def get_my_segmented_images(
