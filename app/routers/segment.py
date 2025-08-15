@@ -2,6 +2,7 @@
 import io, time
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from multipart import file_path
+from sqlalchemy import Double
 from starlette.responses import JSONResponse
 from PIL import Image, ImageDraw
 import numpy as np
@@ -25,10 +26,10 @@ STATIC_MASKS_DIR.mkdir(parents=True, exist_ok=True)  # klasör yoksa oluştur
 @router.post("/segment")
 async def predict_image(
     file: UploadFile = File(...),
-    x: int = 0,
-    y: int = 0,
-    width: int = 0,
-    height: int = 0,
+    x: float = 0,
+    y: float = 0,
+    width: float = 0,
+    height: float = 0,
     shape: str = "rectangle",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
