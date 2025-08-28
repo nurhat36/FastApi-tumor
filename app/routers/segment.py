@@ -23,17 +23,27 @@ router = APIRouter(tags=["segment"])
 STATIC_MASKS_DIR = Path("static/masks")
 STATIC_MASKS_DIR.mkdir(parents=True, exist_ok=True)  # klasör yoksa oluştur
 
+from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
+from PIL import Image, ImageDraw
+import numpy as np
+import io, cv2, time
+
 @router.post("/segment")
 async def predict_image(
     file: UploadFile = File(...),
-    x: float = 0,
-    y: float = 0,
-    width: float = 0,
-    height: float = 0,
-    shape: str = "rectangle",
+    x: float = Form(...),       # Form() ekledim
+    y: float = Form(...),
+    width: float = Form(...),
+    height: float = Form(...),
+    shape: str = Form(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    print(f"x: {x}, y: {y}, width: {width}, height: {height}")
+    print("shape:", shape)
+
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("L")
@@ -58,9 +68,7 @@ async def predict_image(
             draw = ImageDraw.Draw(mask)
             if shape == "rectangle":
                 draw.rectangle([x, y, x + width, y + height], fill=255)
-            elif shape == "circle":
-                draw.ellipse([x, y, x + width, y + height], fill=255)
-            elif shape == "oval":
+            elif shape in ["circle", "oval"]:
                 draw.ellipse([x, y, x + width, y + height], fill=255)
             mask_np = np.array(mask)
             prediction_mask_resized = cv2.bitwise_and(prediction_mask_resized, mask_np)
