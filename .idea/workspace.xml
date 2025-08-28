@@ -6,6 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="a02c96c2-05e0-47bc-bee2-d670bc8339b3" name="Changes" comment="1 ve 0lardan oluşan bir matris elde edildi">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/models/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/models/models.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/app/routers/segment.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routers/segment.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -169,7 +170,7 @@
       <workItem from="1755726880812" duration="1205000" />
       <workItem from="1755786311603" duration="4968000" />
       <workItem from="1756327962379" duration="4123000" />
-      <workItem from="1756370697491" duration="1083000" />
+      <workItem from="1756370697491" duration="4023000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -243,7 +244,15 @@
       <option name="project" value="LOCAL" />
       <updated>1755276729043</updated>
     </task>
-    <option name="localTasksCounter" value="10" />
+    <task id="LOCAL-00010" summary="1 ve 0lardan oluşan bir matris elde edildi">
+      <option name="closed" value="true" />
+      <created>1756372807180</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1756372807180</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -261,7 +270,7 @@
     <option name="LAST_COMMIT_MESSAGE" value="1 ve 0lardan oluşan bir matris elde edildi" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/fastapi_tumor$create_tables.coverage" NAME="create_tables Coverage Results" MODIFIED="1754761750083" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/app" />
+    <SUITE FILE_PATH="coverage/fastapi_tumor$create_tables.coverage" NAME="create_tables Coverage Results" MODIFIED="1756383910836" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/app" />
     <SUITE FILE_PATH="coverage/fastapi_tumor$models.coverage" NAME="models Coverage Results" MODIFIED="1754761614607" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/app/models" />
   </component>
 </project>

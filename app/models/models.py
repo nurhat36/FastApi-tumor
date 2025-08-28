@@ -18,9 +18,11 @@ class Mask(Base):
     __tablename__ = "masks"
 
     id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String(255), nullable=False)  # mask dosya adı
-    file_path = Column(String(255), nullable=False)  # dosya yolu (ör. 'static/masks/mask_123.png')
+    filename = Column(String(255), nullable=False)         # mask dosya adı
+    file_path = Column(String(255), nullable=False)        # mask dosya yolu (ör. 'static/masks/mask_123.png')
+    original_file_path = Column(String(255), nullable=True) # orijinal resim yolu (ör. 'static/originals/original_123.png')
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="masks")
+
