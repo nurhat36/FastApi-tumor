@@ -1,5 +1,7 @@
 # app/routers/segment.py
 import io, time
+import os
+
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from multipart import file_path
 from sqlalchemy import Double
@@ -21,7 +23,10 @@ router = APIRouter(tags=["segment"])
 
 # STATIC klasör yolu
 STATIC_MASKS_DIR = Path("static/masks")
+STATIC_ORIGINALS_DIR = Path("static/originals")
 STATIC_MASKS_DIR.mkdir(parents=True, exist_ok=True)  # klasör yoksa oluştur
+STATIC_ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException
 from fastapi.responses import JSONResponse
@@ -33,7 +38,7 @@ import io, cv2, time
 @router.post("/segment")
 async def predict_image(
     file: UploadFile = File(...),
-    x: float = Form(...),       # Form() ekledim
+    x: float = Form(...),
     y: float = Form(...),
     width: float = Form(...),
     height: float = Form(...),
@@ -41,28 +46,26 @@ async def predict_image(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    print(f"x: {x}, y: {y}, width: {width}, height: {height}")
-    print("shape:", shape)
-
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("L")
         original_size = image.size
 
-        # 128x128'e resize
+        # Orijinal görseli kaydet
+        original_filename = f"original_user{current_user.id}_{int(time.time())}.png"
+        original_save_path = STATIC_ORIGINALS_DIR / original_filename
+        image.save(original_save_path, format="PNG")
+
+        # Model işlemleri...
         image_resized = image.resize((128, 128))
         image_np = np.array(image_resized, dtype=np.float32) / 255.0
         image_np = np.expand_dims(image_np, axis=-1)
         image_np = np.expand_dims(image_np, axis=0)
 
-        # Model tahmini
         prediction = model.predict(image_np)[0]
         prediction_mask = (prediction > 0.5).astype(np.uint8) * 255
-
-        # Orijinal boyuta döndür
         prediction_mask_resized = cv2.resize(prediction_mask, original_size)
 
-        # Seçilen alanı uygula
         if width > 0 and height > 0:
             mask = Image.new("L", original_size, 0)
             draw = ImageDraw.Draw(mask)
@@ -73,28 +76,35 @@ async def predict_image(
             mask_np = np.array(mask)
             prediction_mask_resized = cv2.bitwise_and(prediction_mask_resized, mask_np)
 
-        # PNG olarak kaydet
-        filename = f"mask_user{current_user.id}_{int(time.time())}.png"
-        save_path = STATIC_MASKS_DIR / filename
+        # Mask kaydet
+        mask_filename = f"mask_user{current_user.id}_{int(time.time())}.png"
+        mask_save_path = STATIC_MASKS_DIR / mask_filename
         mask_image = Image.fromarray(prediction_mask_resized.astype(np.uint8), mode='L')
-        mask_image.save(save_path, format="PNG")
+        mask_image.save(mask_save_path, format="PNG")
 
-        # DB'ye kaydet
-        mask_record = Mask(filename=filename, owner_id=current_user.id, file_path=str(save_path))
+        # DB kaydı
+        mask_record = Mask(
+            filename=mask_filename,
+            file_path=str(mask_save_path),
+            original_file_path=str(original_save_path),
+            owner_id=current_user.id
+        )
         db.add(mask_record)
         db.commit()
         db.refresh(mask_record)
 
-        mask_url = f"/static/masks/{filename}"
         return JSONResponse(content={
             "mask_id": mask_record.id,
-            "filename": filename,
-            "mask_url": mask_url
+            "mask_filename": mask_filename,
+            "mask_url": f"/static/masks/{mask_filename}",
+            "original_filename": original_filename,
+            "original_url": f"/static/originals/{original_filename}"
         })
 
     except Exception as e:
         print("HATA segment:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/my-masks")
 def get_my_segmented_images(
@@ -117,3 +127,34 @@ def get_my_segmented_images(
     except Exception as e:
         print("HATA get_my_segmented_images:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/segment/{mask_id}")
+def delete_mask(
+    mask_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Mask kaydını bul
+    mask_record = db.query(Mask).filter(
+        Mask.id == mask_id,
+        Mask.owner_id == current_user.id
+    ).first()
+
+    if not mask_record:
+        raise HTTPException(status_code=404, detail="Mask bulunamadı veya size ait değil.")
+
+    # Dosyaları sil
+    try:
+        if mask_record.file_path and os.path.exists(mask_record.file_path):
+            os.remove(mask_record.file_path)
+
+        if mask_record.original_file_path and os.path.exists(mask_record.original_file_path):
+            os.remove(mask_record.original_file_path)
+    except Exception as e:
+        print("Dosya silme hatası:", str(e))
+
+    # DB kaydını sil
+    db.delete(mask_record)
+    db.commit()
+
+    return {"detail": f"Mask (id={mask_id}) ve ilgili dosyalar silindi."}
