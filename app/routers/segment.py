@@ -17,6 +17,7 @@ from app.models.unet_model import model
 from app.models.models import Mask
 from app.utils.security import get_current_user
 from app.models.models import User
+from fastapi import Body
 
 
 router = APIRouter(tags=["segment"])
@@ -158,3 +159,69 @@ def delete_mask(
     db.commit()
 
     return {"detail": f"Mask (id={mask_id}) ve ilgili dosyalar silindi."}
+@router.put("/segment/{mask_id}")
+def update_mask(
+    mask_id: int,
+    filename: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    mask_record = db.query(Mask).filter(
+        Mask.id == mask_id,
+        Mask.owner_id == current_user.id
+    ).first()
+
+    if not mask_record:
+        raise HTTPException(status_code=404, detail="Mask bulunamadı veya size ait değil.")
+
+    mask_record.filename = filename
+    db.commit()
+    db.refresh(mask_record)
+
+    return {
+        "mask_id": mask_record.id,
+        "filename": mask_record.filename,
+        "mask_url": f"/static/masks/{mask_record.filename}"
+    }
+@router.put("/segment/{mask_id}/replace")
+async def replace_mask(
+    mask_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    mask_record = db.query(Mask).filter(
+        Mask.id == mask_id,
+        Mask.owner_id == current_user.id
+    ).first()
+
+    if not mask_record:
+        raise HTTPException(status_code=404, detail="Mask bulunamadı veya size ait değil.")
+
+    # Eski dosyaları sil
+    try:
+        if mask_record.file_path and os.path.exists(mask_record.file_path):
+            os.remove(mask_record.file_path)
+    except Exception as e:
+        print("Eski mask dosyası silinemedi:", str(e))
+
+    # Yeni dosyayı kaydet
+    contents = await file.read()
+    new_filename = f"mask_user{current_user.id}_{int(time.time())}.png"
+    new_save_path = STATIC_MASKS_DIR / new_filename
+
+    with open(new_save_path, "wb") as f:
+        f.write(contents)
+
+    # DB kaydını güncelle
+    mask_record.filename = new_filename
+    mask_record.file_path = str(new_save_path)
+
+    db.commit()
+    db.refresh(mask_record)
+
+    return {
+        "mask_id": mask_record.id,
+        "filename": mask_record.filename,
+        "mask_url": f"/static/masks/{mask_record.filename}"
+    }
