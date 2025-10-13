@@ -154,6 +154,8 @@ def delete_mask(
     except Exception as e:
         print("Dosya silme hatası:", str(e))
 
+
+
     # DB kaydını sil
     db.delete(mask_record)
     db.commit()
