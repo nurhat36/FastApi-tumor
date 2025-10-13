@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="a02c96c2-05e0-47bc-bee2-d670bc8339b3" name="Changes" comment="1 ve 0lardan oluşan bir matris elde edildi">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routers/segment.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routers/segment.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -172,6 +171,10 @@
       <workItem from="1756370697491" duration="7720000" />
       <workItem from="1756485264060" duration="916000" />
       <workItem from="1756570421456" duration="2293000" />
+      <workItem from="1756636942212" duration="2818000" />
+      <workItem from="1760362319929" duration="13000" />
+      <workItem from="1760364299400" duration="555000" />
+      <workItem from="1760364963432" duration="736000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -261,7 +264,15 @@
       <option name="project" value="LOCAL" />
       <updated>1756387292465</updated>
     </task>
-    <option name="localTasksCounter" value="12" />
+    <task id="LOCAL-00012" summary="1 ve 0lardan oluşan bir matris elde edildi">
+      <option name="closed" value="true" />
+      <created>1756637082773</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1756637082773</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
