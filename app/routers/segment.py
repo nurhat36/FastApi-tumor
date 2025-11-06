@@ -18,6 +18,8 @@ from app.models.models import Mask
 from app.utils.security import get_current_user
 from app.models.models import User
 from fastapi import Body
+from tensorflow.keras.models import load_model
+from tensorflow.keras import backend as K
 
 
 router = APIRouter(tags=["segment"])
@@ -36,6 +38,28 @@ from PIL import Image, ImageDraw
 import numpy as np
 import io, cv2, time
 
+def dice_loss(y_true, y_pred):
+    smooth = 1e-6
+    y_true_f = K.flatten(y_true)
+    y_pred_f = K.flatten(y_pred)
+    intersection = K.sum(y_true_f * y_pred_f)
+    dice = (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+    return 1.0 - dice
+
+# 🔹 Eğitimde kullandığın model dosyası yolu
+MODEL_PATH = "app/static/tumor_segmentation_model.h5"
+
+print("🧠 Model yükleniyor...")
+model = load_model(MODEL_PATH, custom_objects={"dice_loss": dice_loss})
+print("✅ Model başarıyla yüklendi.")
+
+# 🔹 Kaydedilecek klasör yolları
+STATIC_ORIGINALS_DIR = "static/originals"
+STATIC_MASKS_DIR = "static/masks"
+
+# ============================================================
+# 🧩 Segmentasyon Endpoint
+# ============================================================
 @router.post("/segment")
 async def predict_image(
     file: UploadFile = File(...),
@@ -48,25 +72,34 @@ async def predict_image(
     current_user: User = Depends(get_current_user)
 ):
     try:
+        # 🔹 Dosyayı oku ve Pillow ile griye çevir
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("L")
         original_size = image.size
 
-        # Orijinal görseli kaydet
+        # 🔹 Orijinal görseli kaydet
         original_filename = f"original_user{current_user.id}_{int(time.time())}.png"
-        original_save_path = STATIC_ORIGINALS_DIR / original_filename
+        original_save_path = f"{STATIC_ORIGINALS_DIR}/{original_filename}"
         image.save(original_save_path, format="PNG")
 
-        # Model işlemleri...
-        image_resized = image.resize((128, 128))
+        # ====================================================
+        # 🔹 Model için görseli hazırla
+        # ====================================================
+        IMG_SIZE = 128
+        image_resized = image.resize((IMG_SIZE, IMG_SIZE))
         image_np = np.array(image_resized, dtype=np.float32) / 255.0
-        image_np = np.expand_dims(image_np, axis=-1)
-        image_np = np.expand_dims(image_np, axis=0)
+        image_np = np.expand_dims(image_np, axis=(0, -1))  # (1,128,128,1)
 
+        # 🔹 Model tahmini
         prediction = model.predict(image_np)[0]
         prediction_mask = (prediction > 0.5).astype(np.uint8) * 255
+
+        # 🔹 Maskeyi orijinal boyuta döndür
         prediction_mask_resized = cv2.resize(prediction_mask, original_size)
 
+        # ====================================================
+        # 🔹 Eğer kullanıcı bir bölge seçtiyse (rectangle / circle)
+        # ====================================================
         if width > 0 and height > 0:
             mask = Image.new("L", original_size, 0)
             draw = ImageDraw.Draw(mask)
@@ -77,13 +110,18 @@ async def predict_image(
             mask_np = np.array(mask)
             prediction_mask_resized = cv2.bitwise_and(prediction_mask_resized, mask_np)
 
-        # Mask kaydet
+        # ====================================================
+        # 🔹 Maskeyi kaydet
+        # ====================================================
         mask_filename = f"mask_user{current_user.id}_{int(time.time())}.png"
-        mask_save_path = STATIC_MASKS_DIR / mask_filename
+        mask_save_path = f"{STATIC_MASKS_DIR}/{mask_filename}"
+
         mask_image = Image.fromarray(prediction_mask_resized.astype(np.uint8), mode='L')
         mask_image.save(mask_save_path, format="PNG")
 
-        # DB kaydı
+        # ====================================================
+        # 🔹 Veritabanı kaydı
+        # ====================================================
         mask_record = Mask(
             filename=mask_filename,
             file_path=str(mask_save_path),
@@ -94,6 +132,9 @@ async def predict_image(
         db.commit()
         db.refresh(mask_record)
 
+        # ====================================================
+        # 🔹 Yanıt
+        # ====================================================
         return JSONResponse(content={
             "mask_id": mask_record.id,
             "mask_filename": mask_filename,
@@ -103,9 +144,8 @@ async def predict_image(
         })
 
     except Exception as e:
-        print("HATA segment:", str(e))
+        print("❌ HATA segment:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/my-masks")
 def get_my_segmented_images(
