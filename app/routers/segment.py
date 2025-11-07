@@ -20,22 +20,51 @@ from app.models.models import User
 from fastapi import Body
 
 
-router = APIRouter(tags=["segment"])
-
-# STATIC klasör yolu
-STATIC_MASKS_DIR = Path("static/masks")
-STATIC_ORIGINALS_DIR = Path("static/originals")
-STATIC_MASKS_DIR.mkdir(parents=True, exist_ok=True)  # klasör yoksa oluştur
-STATIC_ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from tensorflow.keras.models import load_model
+from tensorflow.keras import backend as K
 from PIL import Image, ImageDraw
 import numpy as np
-import io, cv2, time
+import io, cv2, time, os
+from pathlib import Path
 
+# ============================================================
+# 📦 Router ve dizin ayarları
+# ============================================================
+router = APIRouter(tags=["segment"])
+
+STATIC_MASKS_DIR = Path("static/masks")
+STATIC_ORIGINALS_DIR = Path("static/originals")
+STATIC_MASKS_DIR.mkdir(parents=True, exist_ok=True)
+STATIC_ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ============================================================
+# 🧮 Dice Loss (Model ile aynı olmalı)
+# ============================================================
+def dice_loss(y_true, y_pred):
+    smooth = 1e-6
+    y_true_f = K.flatten(y_true)
+    y_pred_f = K.flatten(y_pred)
+    intersection = K.sum(y_true_f * y_pred_f)
+    dice = (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+    return 1.0 - dice
+
+# ============================================================
+# 🧠 Model Yükleme
+# ============================================================
+MODEL_PATH = "app/static/model_per_class.h5"
+
+print("🧠 Model yükleniyor...")
+model = load_model(MODEL_PATH, custom_objects={"dice_loss": dice_loss})
+print("✅ Model başarıyla yüklendi.")
+
+# ============================================================
+# 🎯 Segmentasyon Endpoint
+# ============================================================
 @router.post("/segment")
 async def predict_image(
     file: UploadFile = File(...),
@@ -48,25 +77,53 @@ async def predict_image(
     current_user: User = Depends(get_current_user)
 ):
     try:
+        # ------------------------------------------------------------
+        # 🔹 1. Dosyayı oku ve griye çevir
+        # ------------------------------------------------------------
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents)).convert("L")
-        original_size = image.size
+        image = Image.open(io.BytesIO(contents)).convert("L")  # grayscale
+        original_size = image.size  # (width, height)
 
         # Orijinal görseli kaydet
         original_filename = f"original_user{current_user.id}_{int(time.time())}.png"
         original_save_path = STATIC_ORIGINALS_DIR / original_filename
         image.save(original_save_path, format="PNG")
 
-        # Model işlemleri...
-        image_resized = image.resize((128, 128))
+        # ------------------------------------------------------------
+        # 🔹 2. Görseli modele uygun hale getir
+        # ------------------------------------------------------------
+        IMG_SIZE = 128
+        image_resized = image.resize((IMG_SIZE, IMG_SIZE))
         image_np = np.array(image_resized, dtype=np.float32) / 255.0
-        image_np = np.expand_dims(image_np, axis=-1)
-        image_np = np.expand_dims(image_np, axis=0)
 
-        prediction = model.predict(image_np)[0]
+        # ✅ 2 Kanallı giriş oluştur (örneğin FLAIR + T1CE yoksa aynı kanal iki kez kopyalanır)
+        image_np = np.stack((image_np, image_np), axis=-1)  # (128,128,2)
+        image_np = np.expand_dims(image_np, axis=0)         # (1,128,128,2)
+
+        # ------------------------------------------------------------
+        # 🔹 3. Model Tahmini
+        # ------------------------------------------------------------
+        prediction = model.predict(image_np)[0]  # (128,128,1) veya (128,128,2)
+
+        # Eğer çok kanallı maske varsa, ilk kanalı al
+        if prediction.ndim == 3 and prediction.shape[-1] > 1:
+            prediction = prediction[..., 0]
+
+        # Eşikleme
         prediction_mask = (prediction > 0.5).astype(np.uint8) * 255
+
+        # Eğer squeeze yapılabilecek eksen varsa
+        if prediction_mask.ndim == 3 and prediction_mask.shape[-1] == 1:
+            prediction_mask = np.squeeze(prediction_mask, axis=-1)
+
+        # ------------------------------------------------------------
+        # 🔹 4. Maskeyi orijinal boyuta geri döndür
+        # ------------------------------------------------------------
         prediction_mask_resized = cv2.resize(prediction_mask, original_size)
 
+        # ------------------------------------------------------------
+        # 🔹 5. Kullanıcının çizdiği bölge varsa uygula
+        # ------------------------------------------------------------
         if width > 0 and height > 0:
             mask = Image.new("L", original_size, 0)
             draw = ImageDraw.Draw(mask)
@@ -77,13 +134,18 @@ async def predict_image(
             mask_np = np.array(mask)
             prediction_mask_resized = cv2.bitwise_and(prediction_mask_resized, mask_np)
 
-        # Mask kaydet
+        # ------------------------------------------------------------
+        # 🔹 6. Maskeyi kaydet
+        # ------------------------------------------------------------
         mask_filename = f"mask_user{current_user.id}_{int(time.time())}.png"
         mask_save_path = STATIC_MASKS_DIR / mask_filename
+
         mask_image = Image.fromarray(prediction_mask_resized.astype(np.uint8), mode='L')
         mask_image.save(mask_save_path, format="PNG")
 
-        # DB kaydı
+        # ------------------------------------------------------------
+        # 🔹 7. Veritabanına kaydet
+        # ------------------------------------------------------------
         mask_record = Mask(
             filename=mask_filename,
             file_path=str(mask_save_path),
@@ -94,6 +156,9 @@ async def predict_image(
         db.commit()
         db.refresh(mask_record)
 
+        # ------------------------------------------------------------
+        # 🔹 8. JSON yanıt döndür
+        # ------------------------------------------------------------
         return JSONResponse(content={
             "mask_id": mask_record.id,
             "mask_filename": mask_filename,
@@ -103,7 +168,7 @@ async def predict_image(
         })
 
     except Exception as e:
-        print("HATA segment:", str(e))
+        print("❌ HATA segment:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
