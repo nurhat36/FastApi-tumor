@@ -56,10 +56,10 @@ def dice_loss(y_true, y_pred):
 # ============================================================
 # 🧠 Model Yükleme
 # ============================================================
-MODEL_PATH = "app/static/model_per_class.h5"
+MODEL_PATH = "app/static/best_model.h5"
 
 print("🧠 Model yükleniyor...")
-model = load_model(MODEL_PATH, custom_objects={"dice_loss": dice_loss})
+model = load_model(MODEL_PATH, custom_objects={"dice_loss": dice_loss},compile=False)
 print("✅ Model başarıyla yüklendi.")
 
 # ============================================================
@@ -92,13 +92,23 @@ async def predict_image(
         # ------------------------------------------------------------
         # 🔹 2. Görseli modele uygun hale getir
         # ------------------------------------------------------------
+
+
+        # ✅ 2 Kanallı giriş oluştur (örneğin FLAIR + T1CE yoksa aynı kanal iki kez kopyalanır)
+        # ------------------------------------------------------------
+        # 🔹 2. Görseli modele uygun hale getir
+        # ------------------------------------------------------------
         IMG_SIZE = 128
         image_resized = image.resize((IMG_SIZE, IMG_SIZE))
         image_np = np.array(image_resized, dtype=np.float32) / 255.0
 
-        # ✅ 2 Kanallı giriş oluştur (örneğin FLAIR + T1CE yoksa aynı kanal iki kez kopyalanır)
-        image_np = np.stack((image_np, image_np), axis=-1)  # (128,128,2)
-        image_np = np.expand_dims(image_np, axis=0)         # (1,128,128,2)
+        # ❌ ESKİ HATALI KISIM: (image_np, image_np) yapıp 2 kanal yapıyordun.
+        # image_np = np.stack((image_np, image_np), axis=-1)
+
+        # ✅ YENİ DOĞRU KISIM: Tek kanal (128, 128, 1) haline getiriyoruz.
+        image_np = np.expand_dims(image_np, axis=-1)  # Şekil: (128, 128, 1) olur
+        image_np = np.expand_dims(image_np, axis=0)  # Şekil: (1, 128, 128, 1) olur (Batch boyutu eklendi)
+
 
         # ------------------------------------------------------------
         # 🔹 3. Model Tahmini
