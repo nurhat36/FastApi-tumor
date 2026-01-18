@@ -242,7 +242,8 @@
       <workItem from="1762451772323" duration="2406000" />
       <workItem from="1762504306990" duration="5468000" />
       <workItem from="1763125511800" duration="196000" />
-      <workItem from="1768570943619" duration="2308000" />
+      <workItem from="1768570943619" duration="2850000" />
+      <workItem from="1768730977107" duration="1372000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -383,6 +384,17 @@
     <option featureType="dependencySupport" implementationName="executable:docker" />
     <option featureType="dependencySupport" implementationName="executable:kubectl" />
     <option featureType="dependencySupport" implementationName="python:pyspark" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="stthdtr" />
