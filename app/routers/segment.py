@@ -1,6 +1,7 @@
 # app/routers/segment.py
 import io, time
 import os
+import shutil
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from multipart import file_path
@@ -17,6 +18,7 @@ from app.models.unet_model import model
 from app.models.models import Mask
 from app.utils.security import get_current_user
 from app.models.models import User
+import uuid
 from fastapi import Body
 
 
@@ -236,13 +238,16 @@ def delete_mask(
     db.commit()
 
     return {"detail": f"Mask (id={mask_id}) ve ilgili dosyalar silindi."}
+
+
 @router.put("/segment/{mask_id}")
-def update_mask(
-    mask_id: int,
-    filename: str = Body(..., embed=True),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+async def update_mask(  # I/O işlemi olduğu için async yapıyoruz
+        mask_id: int,
+        file: UploadFile = File(...),  # Body yerine File alıyoruz
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
+    # 1. Kaydı bul
     mask_record = db.query(Mask).filter(
         Mask.id == mask_id,
         Mask.owner_id == current_user.id
@@ -251,7 +256,25 @@ def update_mask(
     if not mask_record:
         raise HTTPException(status_code=404, detail="Mask bulunamadı veya size ait değil.")
 
-    mask_record.filename = filename
+    # 2. Dosya kaydetme işlemleri
+    # Eski dosya varsa silebilirsin veya üzerine yazabilirsin.
+    # Burada güvenli bir dosya adı oluşturuyoruz (çakışmayı önlemek için UUID veya mask_id kullanabilirsin)
+    file_extension = ".png"  # Flutter'dan PNG göndereceğiz
+    new_filename = f"mask_{mask_id}_{uuid.uuid4().hex[:8]}{file_extension}"
+
+    save_directory = "static/masks/"
+    os.makedirs(save_directory, exist_ok=True)  # Klasör yoksa oluştur
+
+    file_location = os.path.join(save_directory, new_filename)
+
+    # Dosyayı diske yaz
+    with open(file_location, "wb+") as file_object:
+        shutil.copyfileobj(file.file, file_object)
+
+    # 3. Veritabanını güncelle
+    # Eğer eski dosya adı farklıysa eskisini diskten silme kodu buraya eklenebilir.
+    mask_record.filename = new_filename
+    mask_record.file_path=f"/static/masks/{mask_record.filename}"
     db.commit()
     db.refresh(mask_record)
 
