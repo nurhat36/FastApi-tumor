@@ -6,6 +6,27 @@
   <component name="ChangeListManager">
     <list default="true" id="a02c96c2-05e0-47bc-bee2-d670bc8339b3" name="Changes" comment="yeni model eklendi">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/routers/segment.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routers/segment.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762453477.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762453695.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762454200.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762454246.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762454260.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762454278.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762505330.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762505482.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762505505.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1768572470.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762453475.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762453694.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762454196.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762454246.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762454258.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762454277.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762505329.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762505482.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762505505.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1768572466.png" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -243,7 +264,8 @@
       <workItem from="1762504306990" duration="5468000" />
       <workItem from="1763125511800" duration="196000" />
       <workItem from="1768570943619" duration="2850000" />
-      <workItem from="1768730977107" duration="1372000" />
+      <workItem from="1768730977107" duration="4602000" />
+      <workItem from="1768987928418" duration="5311000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -373,7 +395,15 @@
       <option name="project" value="LOCAL" />
       <updated>1768572560697</updated>
     </task>
-    <option name="localTasksCounter" value="17" />
+    <task id="LOCAL-00017" summary="yeni model eklendi">
+      <option name="closed" value="true" />
+      <created>1768749022727</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1768749022727</updated>
+    </task>
+    <option name="localTasksCounter" value="18" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
