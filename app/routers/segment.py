@@ -183,6 +183,63 @@ async def predict_image(
         print("❌ HATA segment:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/segment/manual")
+async def create_manual_mask(
+    original_file: UploadFile = File(...),
+    mask_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        timestamp = int(time.time())
+
+        # -------------------------------------------------
+        # 📁 Dosya isimleri
+        # -------------------------------------------------
+        original_filename = f"original_user{current_user.id}_{timestamp}.png"
+        mask_filename = f"manual_mask_user{current_user.id}_{timestamp}.png"
+
+        original_save_path = STATIC_ORIGINALS_DIR / original_filename
+        mask_save_path = STATIC_MASKS_DIR / mask_filename
+
+        # -------------------------------------------------
+        # 🖼 Orijinal resmi kaydet
+        # -------------------------------------------------
+        original_contents = await original_file.read()
+        with open(original_save_path, "wb") as f:
+            f.write(original_contents)
+
+        # -------------------------------------------------
+        # 🎨 Maskeyi kaydet (grayscale garanti)
+        # -------------------------------------------------
+        mask_contents = await mask_file.read()
+        mask_image = Image.open(io.BytesIO(mask_contents)).convert("L")
+        mask_image.save(mask_save_path, format="PNG")
+
+        # -------------------------------------------------
+        # 🗄 DB kaydı oluştur
+        # -------------------------------------------------
+        mask_record = Mask(
+            filename=mask_filename,
+            file_path=str(mask_save_path),
+            original_file_path=str(original_save_path),
+            owner_id=current_user.id
+        )
+
+        db.add(mask_record)
+        db.commit()
+        db.refresh(mask_record)
+
+        return {
+            "mask_id": mask_record.id,
+            "mask_url": f"/static/masks/{mask_filename}",
+            "original_url": f"/static/originals/{original_filename}",
+            "type": "manual"
+        }
+
+    except Exception as e:
+        print("❌ Manual segment error:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/my-masks")
 def get_my_segmented_images(
