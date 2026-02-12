@@ -265,7 +265,11 @@
       <workItem from="1763125511800" duration="196000" />
       <workItem from="1768570943619" duration="2850000" />
       <workItem from="1768730977107" duration="4602000" />
-      <workItem from="1768987928418" duration="5311000" />
+      <workItem from="1768987928418" duration="5654000" />
+      <workItem from="1769176713384" duration="1248000" />
+      <workItem from="1770135258319" duration="1978000" />
+      <workItem from="1770888619324" duration="6752000" />
+      <workItem from="1770924727753" duration="3092000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -403,7 +407,31 @@
       <option name="project" value="LOCAL" />
       <updated>1768749022727</updated>
     </task>
-    <option name="localTasksCounter" value="18" />
+    <task id="LOCAL-00018" summary="yeni model eklendi">
+      <option name="closed" value="true" />
+      <created>1769008980142</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1769008980142</updated>
+    </task>
+    <task id="LOCAL-00019" summary="yeni model eklendi">
+      <option name="closed" value="true" />
+      <created>1770891804145</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1770891804145</updated>
+    </task>
+    <task id="LOCAL-00020" summary="yeni model eklendi">
+      <option name="closed" value="true" />
+      <created>1770902039781</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1770902039781</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
