@@ -19,6 +19,7 @@ from app.models.models import Mask
 from app.utils.security import get_current_user
 from app.models.models import User
 import uuid
+import nibabel as nib
 from fastapi import Body
 
 
@@ -83,7 +84,24 @@ async def predict_image(
         # 🔹 1. Dosyayı oku ve griye çevir
         # ------------------------------------------------------------
         contents = await file.read()
-        image = Image.open(io.BytesIO(contents)).convert("L")  # grayscale
+
+        # 🔥 Eğer NIfTI ise
+        if file.filename.endswith((".nii", ".nii.gz")):
+            mask_filename = segment_volume_nifti(
+                contents,
+                file.filename,
+                current_user
+            )
+
+            return {
+                "type": "volume",
+                "mask_filename": mask_filename,
+                "mask_url": f"/static/masks/{mask_filename}"
+            }
+
+        # 🔥 Değilse PNG gibi devam et
+        image = Image.open(io.BytesIO(contents)).convert("L")
+
         original_size = image.size  # (width, height)
 
         # Orijinal görseli kaydet
@@ -182,6 +200,81 @@ async def predict_image(
     except Exception as e:
         print("❌ HATA segment:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+def segment_volume_nifti(file_bytes, original_filename, current_user):
+
+    ext = ".nii.gz" if original_filename.endswith(".nii.gz") else ".nii"
+
+    temp_filename = f"temp_{uuid.uuid4().hex}{ext}"
+    temp_path = STATIC_MASKS_DIR / temp_filename
+
+    with open(temp_path, "wb") as f:
+        f.write(file_bytes)
+
+    nii = nib.load(str(temp_path))
+    volume = nii.get_fdata()
+    affine = nii.affine
+
+    mask_slices = []
+
+    for i in range(volume.shape[2]):
+        slice_img = volume[:, :, i]
+
+        slice_img = np.clip(
+            slice_img,
+            np.percentile(slice_img, 1),
+            np.percentile(slice_img, 99)
+        )
+
+        slice_img = (slice_img - slice_img.min()) / (slice_img.max() - slice_img.min() + 1e-8)
+        slice_img = (slice_img * 255).astype(np.uint8)
+
+        pil_slice = Image.fromarray(slice_img).convert("L")
+        mask_slice = segment_slice_with_model(pil_slice)
+
+        mask_slices.append(mask_slice)
+
+    mask_volume = np.stack(mask_slices, axis=2)
+
+    timestamp = int(time.time())
+    mask_filename = f"mask_volume_user{current_user.id}_{timestamp}.nii.gz"
+    mask_save_path = STATIC_MASKS_DIR / mask_filename
+
+    mask_nifti = nib.Nifti1Image(mask_volume, affine)
+    nib.save(mask_nifti, str(mask_save_path))
+
+    os.remove(temp_path)
+
+    return mask_filename
+
+
+
+def segment_slice_with_model(pil_image):
+    IMG_SIZE = 128
+
+    original_size = pil_image.size
+
+    image_resized = pil_image.resize((IMG_SIZE, IMG_SIZE))
+    image_np = np.array(image_resized, dtype=np.float32) / 255.0
+
+    image_np = np.expand_dims(image_np, axis=-1)
+    image_np = np.expand_dims(image_np, axis=0)
+
+    prediction = model.predict(image_np)[0]
+
+    if prediction.ndim == 3 and prediction.shape[-1] > 1:
+        prediction = prediction[..., 0]
+
+    prediction_mask = (prediction > 0.5).astype(np.uint8) * 255
+
+    if prediction_mask.ndim == 3 and prediction_mask.shape[-1] == 1:
+        prediction_mask = np.squeeze(prediction_mask, axis=-1)
+
+    prediction_mask_resized = cv2.resize(prediction_mask, original_size)
+
+    return prediction_mask_resized
+
+
+
 
 @router.post("/segment/manual")
 async def create_manual_mask(
