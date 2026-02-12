@@ -34,6 +34,7 @@ from PIL import Image, ImageDraw
 import numpy as np
 import io, cv2, time, os
 from pathlib import Path
+from starlette.responses import StreamingResponse
 
 # ============================================================
 # 📦 Router ve dizin ayarları
@@ -87,16 +88,49 @@ async def predict_image(
 
         # 🔥 Eğer NIfTI ise
         if file.filename.endswith((".nii", ".nii.gz")):
+            timestamp = int(time.time())
+
+            # -------------------------------------------------
+            # 📁 Orijinal NIfTI dosyasını kaydet
+            # -------------------------------------------------
+            original_ext = ".nii.gz" if file.filename.endswith(".nii.gz") else ".nii"
+            original_filename = f"original_volume_user{current_user.id}_{timestamp}{original_ext}"
+            original_save_path = STATIC_ORIGINALS_DIR / original_filename
+
+            with open(original_save_path, "wb") as f:
+                f.write(contents)
+
+            # -------------------------------------------------
+            # 🧠 3D segmentasyon yap
+            # -------------------------------------------------
             mask_filename = segment_volume_nifti(
                 contents,
                 file.filename,
                 current_user
             )
 
+            mask_save_path = STATIC_MASKS_DIR / mask_filename
+
+            # -------------------------------------------------
+            # 🗄 DB kaydı oluştur
+            # -------------------------------------------------
+            mask_record = Mask(
+                filename=mask_filename,
+                file_path=str(mask_save_path),
+                original_file_path=str(original_save_path),
+                owner_id=current_user.id
+            )
+
+            db.add(mask_record)
+            db.commit()
+            db.refresh(mask_record)
+
             return {
                 "type": "volume",
+                "mask_id": mask_record.id,
                 "mask_filename": mask_filename,
-                "mask_url": f"/static/masks/{mask_filename}"
+                "mask_url": f"/static/masks/{mask_filename}",
+                "original_url": f"/static/originals/{original_filename}"
             }
 
         # 🔥 Değilse PNG gibi devam et
@@ -199,6 +233,142 @@ async def predict_image(
 
     except Exception as e:
         print("❌ HATA segment:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# 1. NIfTI BİLGİSİNİ AL (Kaç kesit var?)
+# ============================================================
+@router.get("/segment/nifti/{mask_id}/info")
+async def get_nifti_info(
+        mask_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    # Maske kaydını bul
+    mask_record = db.query(Mask).filter(Mask.id == mask_id, Mask.owner_id == current_user.id).first()
+
+    if not mask_record:
+        raise HTTPException(status_code=404, detail="Maske bulunamadı.")
+
+    # Dosya uzantısını kontrol et
+    if not mask_record.file_path.endswith((".nii", ".nii.gz")):
+        # Eğer PNG ise tek bir kesit gibi davran
+        return {"total_slices": 1, "is_nifti": False}
+
+    # NIfTI dosyasını oku
+    try:
+        nii = nib.load(mask_record.file_path)
+        # Shape genelde (Width, Height, Depth) olur -> (240, 240, 155)
+        depth = nii.shape[2]
+        return {
+            "mask_id": mask_id,
+            "total_slices": depth,
+            "is_nifti": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"NIfTI okuma hatası: {str(e)}")
+
+
+# ============================================================
+# 2. BELİRLİ BİR KESİTİ (SLICE) PNG OLARAK GETİR
+# ============================================================
+@router.get("/segment/nifti/{mask_id}/slice/{slice_index}")
+async def get_nifti_slice(
+        mask_id: int,
+        slice_index: int,
+        type: str = "mask",  # 'original' veya 'mask'
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    mask_record = db.query(Mask).filter(Mask.id == mask_id, Mask.owner_id == current_user.id).first()
+
+    # Hangi dosyadan okuyacağız?
+    target_path = mask_record.file_path if type == "mask" else mask_record.original_file_path
+
+    if not os.path.exists(target_path):
+        raise HTTPException(status_code=404, detail="Dosya diskte yok.")
+
+    try:
+        # NIfTI yükle
+        nii = nib.load(target_path)
+        data = nii.get_fdata()  # 3D Numpy array
+
+        # Index kontrolü
+        if slice_index >= data.shape[2] or slice_index < 0:
+            raise HTTPException(status_code=400, detail="Geçersiz kesit numarası.")
+
+        # Kesiti al (2D array olur)
+        slice_data = data[:, :, slice_index]
+
+        # Görüntüyü normalize et (0-255 arasına çek)
+        # Maske ise zaten 0-1 veya 0-255'tir, Orijinal ise normalizasyon gerekir.
+        if np.max(slice_data) > 0:
+            slice_data = (slice_data - np.min(slice_data)) / (np.max(slice_data) - np.min(slice_data))
+            slice_data = (slice_data * 255).astype(np.uint8)
+        else:
+            slice_data = slice_data.astype(np.uint8)
+
+        # Numpy -> PIL Image -> PNG Bytes
+        # Not: MR görüntüleri genelde 90 derece dönük gelir, düzeltmek için rotate yapılır
+        img = Image.fromarray(slice_data).convert("L").rotate(90, expand=True)
+
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+
+        return StreamingResponse(img_byte_arr, media_type="image/png")
+
+    except Exception as e:
+        print(f"Slice hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# 3. DÜZENLENMİŞ KESİTİ 3D DOSYAYA KAYDET (UPDATE)
+# ============================================================
+@router.post("/segment/nifti/{mask_id}/slice/{slice_index}/update")
+async def update_nifti_slice(
+        mask_id: int,
+        slice_index: int,
+        file: UploadFile = File(...),  # Flutter'dan gelen yeni PNG maske
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
+):
+    mask_record = db.query(Mask).filter(Mask.id == mask_id, Mask.owner_id == current_user.id).first()
+
+    try:
+        # 1. Mevcut 3D maskeyi yükle
+        nii = nib.load(mask_record.file_path)
+        data = nii.get_fdata()  # (W, H, D)
+        affine = nii.affine
+
+        # 2. Gelen PNG'yi oku
+        contents = await file.read()
+        new_slice_img = Image.open(io.BytesIO(contents)).convert("L")
+
+        # Backend'de gönderirken rotate(90) yapmıştık, geri alırken tersini yapmalıyız (-90)
+        # veya boyutları eşleştirmeliyiz. En güvenlisi resize etmektir.
+        new_slice_img = new_slice_img.rotate(-90, expand=True)
+        new_slice_img = new_slice_img.resize((data.shape[0], data.shape[1]))
+
+        new_slice_np = np.array(new_slice_img)
+
+        # 3. 0-255 arası gelen veriyi 0-1 (binary mask) formatına çevir
+        # Eşik değeri (Threshold)
+        new_slice_np = (new_slice_np > 127).astype(np.float64)
+
+        # 4. 3D verinin ilgili kesitini güncelle
+        data[:, :, slice_index] = new_slice_np
+
+        # 5. Yeni NIfTI dosyasını kaydet
+        new_nii = nib.Nifti1Image(data, affine)
+        nib.save(new_nii, mask_record.file_path)
+
+        return {"status": "success", "slice": slice_index}
+
+    except Exception as e:
+        print(f"Update hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 def segment_volume_nifti(file_bytes, original_filename, current_user):
 
