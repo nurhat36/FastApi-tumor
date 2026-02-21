@@ -3,26 +3,63 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
 
+
+# =========================
+# USER
+# =========================
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
-    password = Column(String(100), nullable=False)  # hash saklanacak
+    password = Column(String(100), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    masks = relationship("Mask", back_populates="owner")
+    patients = relationship("Patient", back_populates="owner", cascade="all, delete")
 
 
+# =========================
+# PATIENT
+# =========================
+class Patient(Base):
+    __tablename__ = "patients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    owner = relationship("User", back_populates="patients")
+
+    files = relationship("File", back_populates="patient", cascade="all, delete")
+    masks = relationship("Mask", back_populates="patient", cascade="all, delete")
+
+
+# =========================
+# ORIGINAL FILE (NIfTI)
+# =========================
+class File(Base):
+    __tablename__ = "files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(255), nullable=False)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    patient_id = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"))
+    patient = relationship("Patient", back_populates="files")
+
+
+# =========================
+# SEGMENT MASK
+# =========================
 class Mask(Base):
     __tablename__ = "masks"
 
     id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String(255), nullable=False)         # mask dosya adı
-    file_path = Column(String(255), nullable=False)        # mask dosya yolu (ör. 'static/masks/mask_123.png')
-    original_file_path = Column(String(255), nullable=True) # orijinal resim yolu (ör. 'static/originals/original_123.png')
+    filename = Column(String(255), nullable=False)
+    file_path = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    owner_id = Column(Integer, ForeignKey("users.id"))
-    owner = relationship("User", back_populates="masks")
-
+    patient_id = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"))
+    patient = relationship("Patient", back_populates="masks")
