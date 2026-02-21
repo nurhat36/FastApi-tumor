@@ -1,7 +1,8 @@
 from fastapi import FastAPI
-from app.routers import auth, segment
+from app.routers import auth, segment,patients
 from app.database import Base, engine
 from fastapi.staticfiles import StaticFiles
+
 import os
 app = FastAPI(
     title="Segmentation API",
@@ -14,5 +15,6 @@ Base.metadata.create_all(bind=engine)
 
 app.include_router(auth.router)
 app.include_router(segment.router)
+app.include_router(patients.router)
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/storage", StaticFiles(directory="storage"), name="storage")
