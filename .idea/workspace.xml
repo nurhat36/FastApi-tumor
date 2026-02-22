@@ -4,12 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a02c96c2-05e0-47bc-bee2-d670bc8339b3" name="Changes" comment="yeni model eklendi">
-      <change afterPath="$PROJECT_DIR$/app/routers/file.py" afterDir="false" />
+    <list default="true" id="a02c96c2-05e0-47bc-bee2-d670bc8339b3" name="Changes" comment="dosya yapısı ve database düzenlendi">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/models/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/models/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routers/segment.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routers/segment.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/routers/patients.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routers/patients.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1756404311.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1760364655.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1760364678.png" beforeDir="false" />
@@ -301,7 +298,8 @@
       <workItem from="1770924727753" duration="3765000" />
       <workItem from="1770983687764" duration="2099000" />
       <workItem from="1771492383902" duration="1757000" />
-      <workItem from="1771700972285" duration="9451000" />
+      <workItem from="1771700972285" duration="12583000" />
+      <workItem from="1771790618854" duration="4825000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -479,7 +477,15 @@
       <option name="project" value="LOCAL" />
       <updated>1771705741423</updated>
     </task>
-    <option name="localTasksCounter" value="23" />
+    <task id="LOCAL-00023" summary="dosya yapısı ve database düzenlendi">
+      <option name="closed" value="true" />
+      <created>1771778481521</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1771778481521</updated>
+    </task>
+    <option name="localTasksCounter" value="24" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -506,7 +512,8 @@
     <MESSAGE value="stthdtr" />
     <MESSAGE value="1 ve 0lardan oluşan bir matris elde edildi" />
     <MESSAGE value="yeni model eklendi" />
-    <option name="LAST_COMMIT_MESSAGE" value="yeni model eklendi" />
+    <MESSAGE value="dosya yapısı ve database düzenlendi" />
+    <option name="LAST_COMMIT_MESSAGE" value="dosya yapısı ve database düzenlendi" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/fastapi_tumor$create_tables.coverage" NAME="create_tables Coverage Results" MODIFIED="1771762376853" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/app" />

@@ -62,3 +62,30 @@ async def upload_file(
         "filename": new_file.filename,
         "status": new_file.status
     }
+@router.get("/files/{patient_id}")
+def get_files(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    patient = db.query(Patient).filter(
+        Patient.id == patient_id,
+        Patient.owner_id == current_user.id
+    ).first()
+
+    if not patient:
+        raise HTTPException(status_code=404, detail="Hasta bulunamadı.")
+
+    files = db.query(DBFile).filter(
+        DBFile.patient_id == patient_id
+    ).order_by(DBFile.uploaded_at.desc()).all()
+
+    return [
+        {
+            "id": f.id,
+            "filename": f.filename,
+            "status": f.status,
+            "file_path": f.file_path
+        }
+        for f in files
+    ]
