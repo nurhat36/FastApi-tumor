@@ -17,7 +17,7 @@ from app.database import get_db
 from app.models.unet_model import model
 from app.models.models import Mask
 from app.utils.security import get_current_user
-from app.models.models import User
+from app.models.models import User,File as DBFile,Patient,Mask
 import uuid
 import nibabel as nib
 from fastapi import Body
@@ -39,87 +39,146 @@ from starlette.responses import StreamingResponse
 # ============================================================
 # 📦 Router ve dizin ayarları
 # ============================================================
+# ============================================================
+# 📦 Router ve Dizin Ayarları (Production Ready)
+# ============================================================
+
+from fastapi import APIRouter
+from pathlib import Path
+import os
+
 router = APIRouter(tags=["segment"])
 
+# ------------------------------------------------------------
+# 🔹 Base Path (Güvenli Path Çözümü)
+# ------------------------------------------------------------
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 STATIC_MASKS_DIR = Path("static/masks")
-STATIC_ORIGINALS_DIR = Path("static/originals")
 STATIC_MASKS_DIR.mkdir(parents=True, exist_ok=True)
-STATIC_ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================
 # 🧮 Dice Loss (Model ile aynı olmalı)
 # ============================================================
+
+
+
 def dice_loss(y_true, y_pred):
     smooth = 1e-6
     y_true_f = K.flatten(y_true)
     y_pred_f = K.flatten(y_pred)
     intersection = K.sum(y_true_f * y_pred_f)
-    dice = (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+    dice = (2. * intersection + smooth) / (
+        K.sum(y_true_f) + K.sum(y_pred_f) + smooth
+    )
     return 1.0 - dice
 
-# ============================================================
-# 🧠 Model Yükleme
-# ============================================================
-MODEL_PATH = "app/static/best_model.h5"
 
-print("🧠 Model yükleniyor...")
-model = load_model(MODEL_PATH, custom_objects={"dice_loss": dice_loss},compile=False)
-print("✅ Model başarıyla yüklendi.")
+# ============================================================
+# 🧠 Model Yükleme (Startup Event ile)
+# ============================================================
+
+
+
+MODEL_PATH = BASE_DIR / "static" / "best_model.h5"
+
+model = None  # Global model referansı
+
+
+@router.on_event("startup")
+def load_segmentation_model():
+    global model
+
+    if model is None:
+        print("🧠 Segmentasyon modeli yükleniyor...")
+
+        if not MODEL_PATH.exists():
+            raise RuntimeError(f"Model bulunamadı: {MODEL_PATH}")
+
+        model = load_model(
+            str(MODEL_PATH),
+            custom_objects={"dice_loss": dice_loss},
+            compile=False
+        )
+
+        print("✅ Segmentasyon modeli başarıyla yüklendi.")
+
+
+# ============================================================
+# 🔎 Model Getter (Güvenli erişim için)
+# ============================================================
+
+def get_model():
+    if model is None:
+        raise RuntimeError("Model henüz yüklenmedi.")
+    return model
 
 # ============================================================
 # 🎯 Segmentasyon Endpoint
 # ============================================================
-@router.post("/segment")
+# ============================================================
+# 🎯 Segmentasyon Endpoint (YENİ MİMARİ)
+# ============================================================
+@router.post("/segment/{file_id}")
 async def predict_image(
-    file: UploadFile = File(...),
-    x: float = Form(...),
-    y: float = Form(...),
-    width: float = Form(...),
-    height: float = Form(...),
-    shape: str = Form(...),
+    file_id: int,
+    x: float = Form(0),
+    y: float = Form(0),
+    width: float = Form(0),
+    height: float = Form(0),
+    shape: str = Form("rectangle"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
         # ------------------------------------------------------------
-        # 🔹 1. Dosyayı oku ve griye çevir
+        # 🔹 1. File kaydını bul + yetki kontrolü
         # ------------------------------------------------------------
-        contents = await file.read()
+        file_record = (
+            db.query(DBFile)
+            .join(DBFile.patient)
+            .filter(
+                DBFile.id == file_id,
+                Patient.owner_id == current_user.id
+            )
+            .first()
+        )
 
-        # 🔥 Eğer NIfTI ise
-        if file.filename.endswith((".nii", ".nii.gz")):
-            timestamp = int(time.time())
+        if not file_record:
+            raise HTTPException(status_code=404, detail="Dosya bulunamadı.")
 
-            # -------------------------------------------------
-            # 📁 Orijinal NIfTI dosyasını kaydet
-            # -------------------------------------------------
-            original_ext = ".nii.gz" if file.filename.endswith(".nii.gz") else ".nii"
-            original_filename = f"original_volume_user{current_user.id}_{timestamp}{original_ext}"
-            original_save_path = STATIC_ORIGINALS_DIR / original_filename
+        if not os.path.exists(file_record.file_path):
+            raise HTTPException(status_code=404, detail="Orijinal dosya diskte yok.")
 
-            with open(original_save_path, "wb") as f:
-                f.write(contents)
+        # ------------------------------------------------------------
+        # 🔹 2. Dosyayı oku
+        # ------------------------------------------------------------
+        with open(file_record.file_path, "rb") as f:
+            contents = f.read()
 
-            # -------------------------------------------------
-            # 🧠 3D segmentasyon yap
-            # -------------------------------------------------
+        # ============================================================
+        # 🔥 NIFTI VOLUME SEGMENTATION
+        # ============================================================
+        if file_record.file_path.endswith((".nii", ".nii.gz")):
+
             mask_filename = segment_volume_nifti(
                 contents,
-                file.filename,
+                file_record.filename,
                 current_user
             )
 
             mask_save_path = STATIC_MASKS_DIR / mask_filename
 
-            # -------------------------------------------------
-            # 🗄 DB kaydı oluştur
-            # -------------------------------------------------
+            # --------------------------------------------------------
+            # 🗄 Mask DB kaydı (file_id ile bağlı!)
+            # --------------------------------------------------------
             mask_record = Mask(
                 filename=mask_filename,
                 file_path=str(mask_save_path),
-                original_file_path=str(original_save_path),
-                owner_id=current_user.id
+                file_id=file_record.id
             )
+
+            file_record.status = "segmented"
 
             db.add(mask_record)
             db.commit()
@@ -128,107 +187,90 @@ async def predict_image(
             return {
                 "type": "volume",
                 "mask_id": mask_record.id,
-                "mask_filename": mask_filename,
-                "mask_url": f"/static/masks/{mask_filename}",
-                "original_url": f"/static/originals/{original_filename}"
+                "mask_url": f"/static/masks/{mask_filename}"
             }
 
-        # 🔥 Değilse PNG gibi devam et
+        # ============================================================
+        # 🔥 2D IMAGE SEGMENTATION
+        # ============================================================
         image = Image.open(io.BytesIO(contents)).convert("L")
-
-        original_size = image.size  # (width, height)
-
-        # Orijinal görseli kaydet
-        original_filename = f"original_user{current_user.id}_{int(time.time())}.png"
-        original_save_path = STATIC_ORIGINALS_DIR / original_filename
-        image.save(original_save_path, format="PNG")
+        original_size = image.size
 
         # ------------------------------------------------------------
-        # 🔹 2. Görseli modele uygun hale getir
-        # ------------------------------------------------------------
-
-
-        # ✅ 2 Kanallı giriş oluştur (örneğin FLAIR + T1CE yoksa aynı kanal iki kez kopyalanır)
-        # ------------------------------------------------------------
-        # 🔹 2. Görseli modele uygun hale getir
+        # 🔹 3. Model input hazırlığı
         # ------------------------------------------------------------
         IMG_SIZE = 128
         image_resized = image.resize((IMG_SIZE, IMG_SIZE))
         image_np = np.array(image_resized, dtype=np.float32) / 255.0
-
-        # ❌ ESKİ HATALI KISIM: (image_np, image_np) yapıp 2 kanal yapıyordun.
-        # image_np = np.stack((image_np, image_np), axis=-1)
-
-        # ✅ YENİ DOĞRU KISIM: Tek kanal (128, 128, 1) haline getiriyoruz.
-        image_np = np.expand_dims(image_np, axis=-1)  # Şekil: (128, 128, 1) olur
-        image_np = np.expand_dims(image_np, axis=0)  # Şekil: (1, 128, 128, 1) olur (Batch boyutu eklendi)
-
+        image_np = np.expand_dims(image_np, axis=-1)
+        image_np = np.expand_dims(image_np, axis=0)
 
         # ------------------------------------------------------------
-        # 🔹 3. Model Tahmini
+        # 🔹 4. Model Tahmini
         # ------------------------------------------------------------
-        prediction = model.predict(image_np)[0]  # (128,128,1) veya (128,128,2)
+        prediction = model.predict(image_np)[0]
 
-        # Eğer çok kanallı maske varsa, ilk kanalı al
         if prediction.ndim == 3 and prediction.shape[-1] > 1:
             prediction = prediction[..., 0]
 
-        # Eşikleme
         prediction_mask = (prediction > 0.5).astype(np.uint8) * 255
 
-        # Eğer squeeze yapılabilecek eksen varsa
         if prediction_mask.ndim == 3 and prediction_mask.shape[-1] == 1:
             prediction_mask = np.squeeze(prediction_mask, axis=-1)
 
-        # ------------------------------------------------------------
-        # 🔹 4. Maskeyi orijinal boyuta geri döndür
-        # ------------------------------------------------------------
         prediction_mask_resized = cv2.resize(prediction_mask, original_size)
 
         # ------------------------------------------------------------
-        # 🔹 5. Kullanıcının çizdiği bölge varsa uygula
+        # 🔹 5. Kullanıcı ROI uygulaması
         # ------------------------------------------------------------
         if width > 0 and height > 0:
             mask = Image.new("L", original_size, 0)
             draw = ImageDraw.Draw(mask)
+
             if shape == "rectangle":
                 draw.rectangle([x, y, x + width, y + height], fill=255)
             elif shape in ["circle", "oval"]:
                 draw.ellipse([x, y, x + width, y + height], fill=255)
+
             mask_np = np.array(mask)
-            prediction_mask_resized = cv2.bitwise_and(prediction_mask_resized, mask_np)
+            prediction_mask_resized = cv2.bitwise_and(
+                prediction_mask_resized,
+                mask_np
+            )
 
         # ------------------------------------------------------------
         # 🔹 6. Maskeyi kaydet
         # ------------------------------------------------------------
-        mask_filename = f"mask_user{current_user.id}_{int(time.time())}.png"
+        mask_filename = f"mask_file{file_id}_{int(time.time())}.png"
         mask_save_path = STATIC_MASKS_DIR / mask_filename
 
-        mask_image = Image.fromarray(prediction_mask_resized.astype(np.uint8), mode='L')
+        mask_image = Image.fromarray(
+            prediction_mask_resized.astype(np.uint8),
+            mode="L"
+        )
         mask_image.save(mask_save_path, format="PNG")
 
         # ------------------------------------------------------------
-        # 🔹 7. Veritabanına kaydet
+        # 🔹 7. DB kaydı (file_id ile bağlı)
         # ------------------------------------------------------------
         mask_record = Mask(
             filename=mask_filename,
             file_path=str(mask_save_path),
-            original_file_path=str(original_save_path),
-            owner_id=current_user.id
+            file_id=file_record.id
         )
+
+        file_record.status = "segmented"
+
         db.add(mask_record)
         db.commit()
         db.refresh(mask_record)
 
         # ------------------------------------------------------------
-        # 🔹 8. JSON yanıt döndür
+        # 🔹 8. JSON Response
         # ------------------------------------------------------------
         return JSONResponse(content={
             "mask_id": mask_record.id,
-            "mask_filename": mask_filename,
-            "mask_url": f"/static/masks/{mask_filename}",
-            "original_filename": original_filename,
-            "original_url": f"/static/originals/{original_filename}"
+            "mask_url": f"/static/masks/{mask_filename}"
         })
 
     except Exception as e:
@@ -241,134 +283,152 @@ async def predict_image(
 # ============================================================
 @router.get("/segment/nifti/{mask_id}/info")
 async def get_nifti_info(
-        mask_id: int,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    mask_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # Maske kaydını bul
-    mask_record = db.query(Mask).filter(Mask.id == mask_id, Mask.owner_id == current_user.id).first()
+    mask_record = (
+        db.query(Mask)
+        .join(Mask.file)
+        .join(DBFile.patient)
+        .filter(
+            Mask.id == mask_id,
+            DBFile.patient.has(owner_id=current_user.id)
+        )
+        .first()
+    )
 
     if not mask_record:
         raise HTTPException(status_code=404, detail="Maske bulunamadı.")
 
-    # Dosya uzantısını kontrol et
     if not mask_record.file_path.endswith((".nii", ".nii.gz")):
-        # Eğer PNG ise tek bir kesit gibi davran
         return {"total_slices": 1, "is_nifti": False}
 
-    # NIfTI dosyasını oku
     try:
         nii = nib.load(mask_record.file_path)
-        # Shape genelde (Width, Height, Depth) olur -> (240, 240, 155)
         depth = nii.shape[2]
+
         return {
             "mask_id": mask_id,
             "total_slices": depth,
             "is_nifti": True
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"NIfTI okuma hatası: {str(e)}")
-
 
 # ============================================================
 # 2. BELİRLİ BİR KESİTİ (SLICE) PNG OLARAK GETİR
 # ============================================================
 @router.get("/segment/nifti/{mask_id}/slice/{slice_index}")
 async def get_nifti_slice(
-        mask_id: int,
-        slice_index: int,
-        type: str = "mask",  # 'original' veya 'mask'
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    mask_id: int,
+    slice_index: int,
+    type: str = "mask",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    mask_record = db.query(Mask).filter(Mask.id == mask_id, Mask.owner_id == current_user.id).first()
+    mask_record = (
+        db.query(Mask)
+        .join(Mask.file)
+        .join(DBFile.patient)
+        .filter(
+            Mask.id == mask_id,
+            DBFile.patient.has(owner_id=current_user.id)
+        )
+        .first()
+    )
 
-    # Hangi dosyadan okuyacağız?
-    target_path = mask_record.file_path if type == "mask" else mask_record.original_file_path
+    if not mask_record:
+        raise HTTPException(status_code=404, detail="Maske bulunamadı.")
+
+    # ORIGINAL artık Mask içinde değil → File içinden alıyoruz
+    target_path = (
+        mask_record.file_path
+        if type == "mask"
+        else mask_record.file.file_path
+    )
 
     if not os.path.exists(target_path):
         raise HTTPException(status_code=404, detail="Dosya diskte yok.")
 
     try:
-        # NIfTI yükle
         nii = nib.load(target_path)
-        data = nii.get_fdata()  # 3D Numpy array
+        data = nii.get_fdata()
 
-        # Index kontrolü
         if slice_index >= data.shape[2] or slice_index < 0:
             raise HTTPException(status_code=400, detail="Geçersiz kesit numarası.")
 
-        # Kesiti al (2D array olur)
         slice_data = data[:, :, slice_index]
 
-        # Görüntüyü normalize et (0-255 arasına çek)
-        # Maske ise zaten 0-1 veya 0-255'tir, Orijinal ise normalizasyon gerekir.
         if np.max(slice_data) > 0:
-            slice_data = (slice_data - np.min(slice_data)) / (np.max(slice_data) - np.min(slice_data))
+            slice_data = (slice_data - np.min(slice_data)) / (
+                np.max(slice_data) - np.min(slice_data)
+            )
             slice_data = (slice_data * 255).astype(np.uint8)
         else:
             slice_data = slice_data.astype(np.uint8)
 
-        # Numpy -> PIL Image -> PNG Bytes
-        # Not: MR görüntüleri genelde 90 derece dönük gelir, düzeltmek için rotate yapılır
         img = Image.fromarray(slice_data).convert("L").rotate(90, expand=True)
 
         img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='PNG')
+        img.save(img_byte_arr, format="PNG")
         img_byte_arr.seek(0)
 
         return StreamingResponse(img_byte_arr, media_type="image/png")
 
     except Exception as e:
-        print(f"Slice hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # ============================================================
 # 3. DÜZENLENMİŞ KESİTİ 3D DOSYAYA KAYDET (UPDATE)
 # ============================================================
 @router.post("/segment/nifti/{mask_id}/slice/{slice_index}/update")
 async def update_nifti_slice(
-        mask_id: int,
-        slice_index: int,
-        file: UploadFile = File(...),  # Flutter'dan gelen yeni PNG maske
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    mask_id: int,
+    slice_index: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    mask_record = db.query(Mask).filter(Mask.id == mask_id, Mask.owner_id == current_user.id).first()
+    mask_record = (
+        db.query(Mask)
+        .join(Mask.file)
+        .join(DBFile.patient)
+        .filter(
+            Mask.id == mask_id,
+            DBFile.patient.has(owner_id=current_user.id)
+        )
+        .first()
+    )
+
+    if not mask_record:
+        raise HTTPException(status_code=404, detail="Maske bulunamadı.")
 
     try:
-        # 1. Mevcut 3D maskeyi yükle
         nii = nib.load(mask_record.file_path)
-        data = nii.get_fdata()  # (W, H, D)
+        data = nii.get_fdata()
         affine = nii.affine
 
-        # 2. Gelen PNG'yi oku
         contents = await file.read()
         new_slice_img = Image.open(io.BytesIO(contents)).convert("L")
 
-        # Backend'de gönderirken rotate(90) yapmıştık, geri alırken tersini yapmalıyız (-90)
-        # veya boyutları eşleştirmeliyiz. En güvenlisi resize etmektir.
         new_slice_img = new_slice_img.rotate(-90, expand=True)
-        new_slice_img = new_slice_img.resize((data.shape[0], data.shape[1]))
+        new_slice_img = new_slice_img.resize(
+            (data.shape[0], data.shape[1])
+        )
 
         new_slice_np = np.array(new_slice_img)
-
-        # 3. 0-255 arası gelen veriyi 0-1 (binary mask) formatına çevir
-        # Eşik değeri (Threshold)
         new_slice_np = (new_slice_np > 127).astype(np.float64)
 
-        # 4. 3D verinin ilgili kesitini güncelle
         data[:, :, slice_index] = new_slice_np
 
-        # 5. Yeni NIfTI dosyasını kaydet
         new_nii = nib.Nifti1Image(data, affine)
         nib.save(new_nii, mask_record.file_path)
 
         return {"status": "success", "slice": slice_index}
 
     except Exception as e:
-        print(f"Update hatası: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 def segment_volume_nifti(file_bytes, original_filename, current_user):
 
@@ -446,85 +506,90 @@ def segment_slice_with_model(pil_image):
 
 
 
-@router.post("/segment/manual")
+@router.post("/segment/manual/{file_id}")
 async def create_manual_mask(
-    original_file: UploadFile = File(...),
+    file_id: int,
     mask_file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
+        # ------------------------------------------------------------
+        # 🔹 1. File kaydını bul + yetki kontrolü
+        # ------------------------------------------------------------
+        file_record = (
+            db.query(DBFile)
+            .join(DBFile.patient)
+            .filter(
+                DBFile.id == file_id,
+                Patient.owner_id == current_user.id
+            )
+            .first()
+        )
+
+        if not file_record:
+            raise HTTPException(status_code=404, detail="Dosya bulunamadı.")
+
+        # ------------------------------------------------------------
+        # 🔹 2. Maskeyi kaydet (grayscale garanti)
+        # ------------------------------------------------------------
         timestamp = int(time.time())
-
-        # -------------------------------------------------
-        # 📁 Dosya isimleri
-        # -------------------------------------------------
-        original_filename = f"original_user{current_user.id}_{timestamp}.png"
-        mask_filename = f"manual_mask_user{current_user.id}_{timestamp}.png"
-
-        original_save_path = STATIC_ORIGINALS_DIR / original_filename
+        mask_filename = f"manual_mask_file{file_id}_{timestamp}.png"
         mask_save_path = STATIC_MASKS_DIR / mask_filename
 
-        # -------------------------------------------------
-        # 🖼 Orijinal resmi kaydet
-        # -------------------------------------------------
-        original_contents = await original_file.read()
-        with open(original_save_path, "wb") as f:
-            f.write(original_contents)
-
-        # -------------------------------------------------
-        # 🎨 Maskeyi kaydet (grayscale garanti)
-        # -------------------------------------------------
         mask_contents = await mask_file.read()
         mask_image = Image.open(io.BytesIO(mask_contents)).convert("L")
         mask_image.save(mask_save_path, format="PNG")
 
-        # -------------------------------------------------
-        # 🗄 DB kaydı oluştur
-        # -------------------------------------------------
+        # ------------------------------------------------------------
+        # 🔹 3. DB kaydı (file_id ile bağlı!)
+        # ------------------------------------------------------------
         mask_record = Mask(
             filename=mask_filename,
             file_path=str(mask_save_path),
-            original_file_path=str(original_save_path),
-            owner_id=current_user.id
+            file_id=file_record.id
         )
+
+        # File status güncelle (opsiyonel ama önerilir)
+        file_record.status = "segmented"
 
         db.add(mask_record)
         db.commit()
         db.refresh(mask_record)
 
+        # ------------------------------------------------------------
+        # 🔹 4. JSON Response
+        # ------------------------------------------------------------
         return {
             "mask_id": mask_record.id,
             "mask_url": f"/static/masks/{mask_filename}",
-            "original_url": f"/static/originals/{original_filename}",
             "type": "manual"
         }
 
     except Exception as e:
         print("❌ Manual segment error:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
 @router.get("/my-masks")
 def get_my_segmented_images(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    try:
-        masks = db.query(Mask).filter(Mask.owner_id == current_user.id).all()
+    masks = (
+        db.query(Mask)
+        .join(Mask.file)
+        .join(DBFile.patient)
+        .filter(DBFile.patient.has(owner_id=current_user.id))
+        .all()
+    )
 
-        results = []
-        for mask in masks:
-            results.append({
-                "mask_id": mask.id,
-                "filename": mask.filename,
-                "mask_url": f"/static/masks/{mask.filename}"
-            })
-
-        return JSONResponse(content=results)
-
-    except Exception as e:
-        print("HATA get_my_segmented_images:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+    return [
+        {
+            "mask_id": mask.id,
+            "filename": mask.filename,
+            "file_id": mask.file_id
+        }
+        for mask in masks
+    ]
 
 @router.delete("/segment/{mask_id}")
 def delete_mask(
@@ -532,76 +597,72 @@ def delete_mask(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Mask kaydını bul
-    mask_record = db.query(Mask).filter(
-        Mask.id == mask_id,
-        Mask.owner_id == current_user.id
-    ).first()
+    mask_record = (
+        db.query(Mask)
+        .join(Mask.file)
+        .join(DBFile.patient)
+        .filter(
+            Mask.id == mask_id,
+            DBFile.patient.has(owner_id=current_user.id)
+        )
+        .first()
+    )
 
     if not mask_record:
-        raise HTTPException(status_code=404, detail="Mask bulunamadı veya size ait değil.")
+        raise HTTPException(status_code=404, detail="Mask bulunamadı.")
 
-    # Dosyaları sil
-    try:
-        if mask_record.file_path and os.path.exists(mask_record.file_path):
-            os.remove(mask_record.file_path)
+    if mask_record.file_path and os.path.exists(mask_record.file_path):
+        os.remove(mask_record.file_path)
 
-        if mask_record.original_file_path and os.path.exists(mask_record.original_file_path):
-            os.remove(mask_record.original_file_path)
-    except Exception as e:
-        print("Dosya silme hatası:", str(e))
-
-
-
-    # DB kaydını sil
     db.delete(mask_record)
     db.commit()
 
-    return {"detail": f"Mask (id={mask_id}) ve ilgili dosyalar silindi."}
+    return {"detail": f"Mask (id={mask_id}) silindi."}
 
 
 @router.put("/segment/{mask_id}")
-async def update_mask(  # I/O işlemi olduğu için async yapıyoruz
-        mask_id: int,
-        file: UploadFile = File(...),  # Body yerine File alıyoruz
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+async def update_mask(
+    mask_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    # 1. Kaydı bul
-    mask_record = db.query(Mask).filter(
-        Mask.id == mask_id,
-        Mask.owner_id == current_user.id
-    ).first()
+    mask_record = (
+        db.query(Mask)
+        .join(Mask.file)
+        .join(DBFile.patient)
+        .filter(
+            Mask.id == mask_id,
+            DBFile.patient.has(owner_id=current_user.id)
+        )
+        .first()
+    )
 
     if not mask_record:
-        raise HTTPException(status_code=404, detail="Mask bulunamadı veya size ait değil.")
+        raise HTTPException(status_code=404, detail="Mask bulunamadı.")
 
-    # 2. Dosya kaydetme işlemleri
-    # Eski dosya varsa silebilirsin veya üzerine yazabilirsin.
-    # Burada güvenli bir dosya adı oluşturuyoruz (çakışmayı önlemek için UUID veya mask_id kullanabilirsin)
-    file_extension = ".png"  # Flutter'dan PNG göndereceğiz
+    file_extension = ".png"
     new_filename = f"mask_{mask_id}_{uuid.uuid4().hex[:8]}{file_extension}"
-
     save_directory = "static/masks/"
-    os.makedirs(save_directory, exist_ok=True)  # Klasör yoksa oluştur
+    os.makedirs(save_directory, exist_ok=True)
 
     file_location = os.path.join(save_directory, new_filename)
 
-    # Dosyayı diske yaz
     with open(file_location, "wb+") as file_object:
         shutil.copyfileobj(file.file, file_object)
 
-    # 3. Veritabanını güncelle
-    # Eğer eski dosya adı farklıysa eskisini diskten silme kodu buraya eklenebilir.
+    if os.path.exists(mask_record.file_path):
+        os.remove(mask_record.file_path)
+
     mask_record.filename = new_filename
-    mask_record.file_path=f"/static/masks/{mask_record.filename}"
+    mask_record.file_path = file_location
+
     db.commit()
     db.refresh(mask_record)
 
     return {
         "mask_id": mask_record.id,
-        "filename": mask_record.filename,
-        "mask_url": f"/static/masks/{mask_record.filename}"
+        "filename": mask_record.filename
     }
 @router.put("/segment/{mask_id}/replace")
 async def replace_mask(
@@ -610,22 +671,23 @@ async def replace_mask(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    mask_record = db.query(Mask).filter(
-        Mask.id == mask_id,
-        Mask.owner_id == current_user.id
-    ).first()
+    mask_record = (
+        db.query(Mask)
+        .join(Mask.file)
+        .join(DBFile.patient)
+        .filter(
+            Mask.id == mask_id,
+            DBFile.patient.has(owner_id=current_user.id)
+        )
+        .first()
+    )
 
     if not mask_record:
-        raise HTTPException(status_code=404, detail="Mask bulunamadı veya size ait değil.")
+        raise HTTPException(status_code=404, detail="Mask bulunamadı.")
 
-    # Eski dosyaları sil
-    try:
-        if mask_record.file_path and os.path.exists(mask_record.file_path):
-            os.remove(mask_record.file_path)
-    except Exception as e:
-        print("Eski mask dosyası silinemedi:", str(e))
+    if os.path.exists(mask_record.file_path):
+        os.remove(mask_record.file_path)
 
-    # Yeni dosyayı kaydet
     contents = await file.read()
     new_filename = f"mask_user{current_user.id}_{int(time.time())}.png"
     new_save_path = STATIC_MASKS_DIR / new_filename
@@ -633,7 +695,6 @@ async def replace_mask(
     with open(new_save_path, "wb") as f:
         f.write(contents)
 
-    # DB kaydını güncelle
     mask_record.filename = new_filename
     mask_record.file_path = str(new_save_path)
 
@@ -642,6 +703,5 @@ async def replace_mask(
 
     return {
         "mask_id": mask_record.id,
-        "filename": mask_record.filename,
-        "mask_url": f"/static/masks/{mask_record.filename}"
+        "filename": mask_record.filename
     }
