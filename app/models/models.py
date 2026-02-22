@@ -28,11 +28,10 @@ class Patient(Base):
     name = Column(String(100), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
-    owner = relationship("User", back_populates="patients")
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
+    owner = relationship("User", back_populates="patients")
     files = relationship("File", back_populates="patient", cascade="all, delete")
-    masks = relationship("Mask", back_populates="patient", cascade="all, delete")
 
 
 # =========================
@@ -44,10 +43,13 @@ class File(Base):
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String(255), nullable=False)
     file_path = Column(String(255), nullable=False)
+    status = Column(String(50), default="uploaded")  # önemli!
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     patient_id = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"))
     patient = relationship("Patient", back_populates="files")
+
+    masks = relationship("Mask", back_populates="file", cascade="all, delete")
 
 
 # =========================
@@ -61,5 +63,5 @@ class Mask(Base):
     file_path = Column(String(255), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    patient_id = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"))
-    patient = relationship("Patient", back_populates="masks")
+    file_id = Column(Integer, ForeignKey("files.id", ondelete="CASCADE"))
+    file = relationship("File", back_populates="masks")

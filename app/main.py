@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import auth, segment,patients
+from app.routers import auth, segment,patients,file
 from app.database import Base, engine
 from fastapi.staticfiles import StaticFiles
 
@@ -16,5 +16,6 @@ Base.metadata.create_all(bind=engine)
 app.include_router(auth.router)
 app.include_router(segment.router)
 app.include_router(patients.router)
+app.include_router(file.router)
 
-app.mount("/storage", StaticFiles(directory="storage"), name="storage")
+app.mount("/static", StaticFiles(directory="static"), name="static")
