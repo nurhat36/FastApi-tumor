@@ -5,8 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a02c96c2-05e0-47bc-bee2-d670bc8339b3" name="Changes" comment="dosya yapısı ve database düzenlendi">
+      <change afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routers/patients.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routers/patients.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1756404311.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1760364655.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1760364678.png" beforeDir="false" />
@@ -63,6 +65,7 @@
     <option name="RECENT_TEMPLATES">
       <list>
         <option value="Python Script" />
+        <option value="Dockerfile" />
       </list>
     </option>
   </component>
@@ -104,7 +107,7 @@
     &quot;Python.models.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;nurhatinki&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/Nurhat/OneDrive/Masaüstü/python/data projesi/fastapi-tumor/app/static&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/Nurhat/source/repos/Tubitak_Segmentasyon/fastapi-tumor&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
@@ -299,7 +302,10 @@
       <workItem from="1770983687764" duration="2099000" />
       <workItem from="1771492383902" duration="1757000" />
       <workItem from="1771700972285" duration="12583000" />
-      <workItem from="1771790618854" duration="4825000" />
+      <workItem from="1771790618854" duration="5583000" />
+      <workItem from="1773254913842" duration="176000" />
+      <workItem from="1773261396347" duration="4593000" />
+      <workItem from="1773302625817" duration="1913000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -485,7 +491,15 @@
       <option name="project" value="LOCAL" />
       <updated>1771778481521</updated>
     </task>
-    <option name="localTasksCounter" value="24" />
+    <task id="LOCAL-00024" summary="dosya yapısı ve database düzenlendi">
+      <option name="closed" value="true" />
+      <created>1771795903926</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1771795903926</updated>
+    </task>
+    <option name="localTasksCounter" value="25" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
