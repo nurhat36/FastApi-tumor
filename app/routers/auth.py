@@ -1,3 +1,8 @@
+from google.oauth2 import id_token
+from google.auth.transport import requests
+from pydantic import BaseModel # FastAPI kullanıyorsan veri modeli için
+from fastapi import HTTPException # Hata fırlatmak için
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -26,6 +31,68 @@ class TokenResponse(BaseModel):
     token_type: str
 
 
+# 1. React'ten gelecek verinin şemasını belirliyoruz
+class GoogleAuthRequest(BaseModel):
+    token: str
+
+
+# 2. React (Frontend) tarafındaki GOOGLE_CLIENT_ID ile birebir AYNI olmalı
+GOOGLE_CLIENT_ID = "636599479269-8f0sbt9dpchjfit9so8la30heiqc8ckl.apps.googleusercontent.com"
+
+
+# Rota adını sadece "/google" yaptık. (Prefix ile birleşince "/auth/google" olacak)
+@router.post("/google")
+async def google_login(data: GoogleAuthRequest, db: Session = Depends(get_db)):
+    try:
+        # 1. Access Token ile Google'dan kullanıcı bilgilerini iste
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://www.googleapis.com/oauth2/v3/userinfo?access_token={data.token}"
+            )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Geçersiz Google Access Token!")
+
+        idinfo = response.json()
+
+        # Google'dan gelen veriler
+        email = idinfo.get('email')
+        name = idinfo.get('name', 'Google Kullanıcısı')
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Google hesabından email alınamadı.")
+
+        # 2. Veritabanı işlemleri (Burası senin kodunla aynı)
+        user = db.query(User).filter(User.username == email).first()  # Genelde username veya email ile eşleşir
+
+        if not user:
+            user = User(
+                username=email,
+                # Email alanın varsa ekle: email=email,
+                password="google_sso_user"  # Güvenli bir placeholder
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        # 3. Kendi JWT Token'ını üret
+        access_token = create_access_token(
+            data={
+                "sub": user.username,
+                "user_id": user.id
+            }
+        )
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user_id": user.id,
+            "username": user.username
+        }
+
+    except Exception as e:
+        print(f"HATA google_login: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sunucu hatası: {str(e)}")
 # =========================
 # REGISTER
 # =========================
