@@ -5,54 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a02c96c2-05e0-47bc-bee2-d670bc8339b3" name="Changes" comment="dosya yapısı ve database düzenlendi">
+      <change afterPath="$PROJECT_DIR$/app/routers/mask.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/routers/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routers/auth.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1756404311.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1760364655.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1760364678.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1761306305.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762412380.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762412420.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762453477.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762453695.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762454200.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762454246.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762454260.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762454278.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762505330.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762505482.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1762505505.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/masks/mask_user1_1768572470.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1756404311.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1760364652.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1760364678.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1761306304.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762412379.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762412420.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762453475.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762453694.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762454196.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762454246.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762454258.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762454277.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504442.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504454.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504457.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504476.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504478.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504705.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504711.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504877.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504884.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504885.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762504886.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762505064.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762505259.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762505329.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762505482.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1762505505.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1768572076.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/static/originals/original_user1_1768572466.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -307,7 +262,9 @@
       <workItem from="1773313212549" duration="4748000" />
       <workItem from="1773397127555" duration="5495000" />
       <workItem from="1773531673612" duration="7006000" />
-      <workItem from="1773580271935" duration="421000" />
+      <workItem from="1773580271935" duration="4957000" />
+      <workItem from="1773665958114" duration="2062000" />
+      <workItem from="1773690468982" duration="842000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -509,7 +466,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773306324152</updated>
     </task>
-    <option name="localTasksCounter" value="26" />
+    <task id="LOCAL-00026" summary="dosya yapısı ve database düzenlendi">
+      <option name="closed" value="true" />
+      <created>1773580925010</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1773580925010</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import auth, segment, patients, file
+from app.routers import auth, segment, patients, file,mask
 from app.database import Base, engine
 from fastapi.staticfiles import StaticFiles
 # 1. Bunu ekle
@@ -29,5 +29,7 @@ app.include_router(auth.router)
 app.include_router(segment.router)
 app.include_router(patients.router)
 app.include_router(file.router)
+
+app.include_router(mask.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

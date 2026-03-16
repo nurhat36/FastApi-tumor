@@ -5,15 +5,14 @@ import time
 import shutil
 
 from app.database import get_db
-from app.models.models import File  as DBFile, Patient
+# DİKKAT: Import kısmına Mask eklendi
+from app.models.models import File as DBFile, Patient, Mask, User
 from app.utils.dependencies import get_current_user
-from app.models.models import User
 
 router = APIRouter(tags=["files"])
 
 STATIC_ORIGINALS_DIR = Path("static/originals")
 STATIC_ORIGINALS_DIR.mkdir(parents=True, exist_ok=True)
-
 
 @router.post("/files/{patient_id}")
 async def upload_file(
@@ -62,6 +61,7 @@ async def upload_file(
         "filename": new_file.filename,
         "status": new_file.status
     }
+
 @router.get("/files/{patient_id}")
 def get_files(
     patient_id: int,
@@ -80,12 +80,21 @@ def get_files(
         DBFile.patient_id == patient_id
     ).order_by(DBFile.uploaded_at.desc()).all()
 
-    return [
-        {
+    result = []
+    for f in files:
+        # ------------------------------------------------------------
+        # YENİ: Bu dosyaya ait üretilmiş bir maske var mı?
+        # ------------------------------------------------------------
+        mask = db.query(Mask).filter(Mask.file_id == f.id).order_by(Mask.created_at.desc()).first()
+
+        result.append({
             "id": f.id,
             "filename": f.filename,
-            "status": f.status,
-            "file_path": f.file_path
-        }
-        for f in files
-    ]
+            # Eğer maske varsa status'ü zorla 'segmented' yap, yoksa orijinalini ver
+            "status": "segmented" if mask else f.status,
+            "file_path": f.file_path,
+            # Eğer maske varsa URL'sini ver ki React/Flutter otomatik yüklesin
+            "mask_url": f"/{mask.file_path}" if mask else None
+        })
+
+    return result
