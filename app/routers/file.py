@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pathlib import Path
 import time
 import shutil
+import os
 
 from app.database import get_db
 # DİKKAT: Import kısmına Mask eklendi
@@ -98,3 +99,30 @@ def get_files(
         })
 
     return result
+@router.delete("/files/{file_id}")
+async def delete_full_file(
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. Dosyayı veritabanında bul
+    db_file = db.query(DBFile).filter(DBFile.id == file_id).first()
+    if not db_file:
+        raise HTTPException(status_code=404, detail="Dosya bulunamadı.")
+
+    # 2. Bu dosyaya bağlı maskeleri bul ve diskten sil
+    masks = db.query(Mask).filter(Mask.file_id == file_id).all()
+    for mask in masks:
+        if os.path.exists(mask.file_path):
+            os.remove(mask.file_path)
+        db.delete(mask) # Veritabanından da sil
+
+    # 3. Ana MR dosyasını diskten sil
+    if os.path.exists(db_file.file_path):
+        os.remove(db_file.file_path)
+
+    # 4. Ana dosyayı veritabanından sil ve işlemi onayla
+    db.delete(db_file)
+    db.commit()
+
+    return {"message": "Dosya ve bağlı tüm maskeler kalıcı olarak silindi."}

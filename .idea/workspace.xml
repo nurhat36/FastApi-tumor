@@ -5,9 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="a02c96c2-05e0-47bc-bee2-d670bc8339b3" name="Changes" comment="dosya yapısı ve database düzenlendi">
-      <change afterPath="$PROJECT_DIR$/app/routers/mask.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/routers/file.py" beforeDir="false" afterPath="$PROJECT_DIR$/app/routers/file.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -264,7 +263,9 @@
       <workItem from="1773531673612" duration="7006000" />
       <workItem from="1773580271935" duration="4957000" />
       <workItem from="1773665958114" duration="2062000" />
-      <workItem from="1773690468982" duration="842000" />
+      <workItem from="1773690468982" duration="1795000" />
+      <workItem from="1773756657316" duration="615000" />
+      <workItem from="1773775792347" duration="589000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -474,7 +475,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773580925010</updated>
     </task>
-    <option name="localTasksCounter" value="27" />
+    <task id="LOCAL-00027" summary="dosya yapısı ve database düzenlendi">
+      <option name="closed" value="true" />
+      <created>1773691481941</created>
+      <option name="number" value="00027" />
+      <option name="presentableId" value="LOCAL-00027" />
+      <option name="project" value="LOCAL" />
+      <updated>1773691481941</updated>
+    </task>
+    <option name="localTasksCounter" value="28" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
