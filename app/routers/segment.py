@@ -705,3 +705,51 @@ async def replace_mask(
         "mask_id": mask_record.id,
         "filename": mask_record.filename
     }
+# ============================================================
+# 4. HAM (HENÜZ ANALİZ EDİLMEMİŞ) NIfTI BİLGİSİNİ AL
+# ============================================================
+@router.get("/files/nifti/{file_id}/info")
+async def get_raw_nifti_info(
+    file_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    file_record = db.query(DBFile).join(Patient).filter(DBFile.id == file_id, Patient.owner_id == current_user.id).first()
+    if not file_record or not os.path.exists(file_record.file_path):
+        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+
+    nii = nib.load(file_record.file_path)
+    return {"total_slices": nii.shape[2]}
+
+# ============================================================
+# 5. HAM NIfTI KESİTİNİ PNG OLARAK GETİR (MASKESİZ)
+# ============================================================
+@router.get("/files/nifti/{file_id}/slice/{slice_index}")
+async def get_raw_nifti_slice(
+    file_id: int,
+    slice_index: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    file_record = db.query(DBFile).join(Patient).filter(DBFile.id == file_id, Patient.owner_id == current_user.id).first()
+    if not file_record or not os.path.exists(file_record.file_path):
+        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+
+    nii = nib.load(file_record.file_path)
+    data = nii.get_fdata()
+
+    if slice_index >= data.shape[2] or slice_index < 0:
+        raise HTTPException(status_code=400, detail="Geçersiz kesit")
+
+    slice_data = data[:, :, slice_index]
+    if np.max(slice_data) > 0:
+        slice_data = (slice_data - np.min(slice_data)) / (np.max(slice_data) - np.min(slice_data))
+        slice_data = (slice_data * 255).astype(np.uint8)
+    else:
+        slice_data = slice_data.astype(np.uint8)
+
+    img = Image.fromarray(slice_data).convert("L").rotate(90, expand=True)
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format="PNG")
+    img_byte_arr.seek(0)
+    return StreamingResponse(img_byte_arr, media_type="image/png")
