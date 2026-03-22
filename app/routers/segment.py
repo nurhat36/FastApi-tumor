@@ -705,51 +705,88 @@ async def replace_mask(
         "mask_id": mask_record.id,
         "filename": mask_record.filename
     }
+
+
 # ============================================================
 # 4. HAM (HENÜZ ANALİZ EDİLMEMİŞ) NIfTI BİLGİSİNİ AL
 # ============================================================
 @router.get("/files/nifti/{file_id}/info")
 async def get_raw_nifti_info(
-    file_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        file_id: int,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
-    file_record = db.query(DBFile).join(Patient).filter(DBFile.id == file_id, Patient.owner_id == current_user.id).first()
+    file_record = db.query(DBFile).join(Patient).filter(DBFile.id == file_id,
+                                                        Patient.owner_id == current_user.id).first()
     if not file_record or not os.path.exists(file_record.file_path):
         raise HTTPException(status_code=404, detail="Dosya bulunamadı")
 
     nii = nib.load(file_record.file_path)
-    return {"total_slices": nii.shape[2]}
+    shape = nii.shape
+
+    # shape[0] -> Sagittal (X ekseni)
+    # shape[1] -> Coronal (Y ekseni)
+    # shape[2] -> Axial (Z ekseni)
+    return {
+        "total_slices": shape[2],  # Geriye dönük uyumluluk için (eski kod bozulmasın diye)
+        "axial_slices": shape[2],  # Üstten (Z)
+        "coronal_slices": shape[1],  # Önden (Y)
+        "sagittal_slices": shape[0]  # Yandan (X)
+    }
+
 
 # ============================================================
 # 5. HAM NIfTI KESİTİNİ PNG OLARAK GETİR (MASKESİZ)
 # ============================================================
 @router.get("/files/nifti/{file_id}/slice/{slice_index}")
 async def get_raw_nifti_slice(
-    file_id: int,
-    slice_index: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        file_id: int,
+        slice_index: int,
+        axis: str = "axial",  # YENİ: Flutter'dan gelecek eksen parametresi (Varsayılan: axial)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
-    file_record = db.query(DBFile).join(Patient).filter(DBFile.id == file_id, Patient.owner_id == current_user.id).first()
+    file_record = db.query(DBFile).join(Patient).filter(DBFile.id == file_id,
+                                                        Patient.owner_id == current_user.id).first()
     if not file_record or not os.path.exists(file_record.file_path):
         raise HTTPException(status_code=404, detail="Dosya bulunamadı")
 
     nii = nib.load(file_record.file_path)
     data = nii.get_fdata()
 
-    if slice_index >= data.shape[2] or slice_index < 0:
-        raise HTTPException(status_code=400, detail="Geçersiz kesit")
+    # --------------------------------------------------------
+    # EKSENE GÖRE KESİTİ (DİLİMİ) AL VE KONTROL ET
+    # --------------------------------------------------------
+    if axis == "sagittal":
+        if slice_index >= data.shape[0] or slice_index < 0:
+            raise HTTPException(status_code=400, detail="Geçersiz Sagittal kesit")
+        slice_data = data[slice_index, :, :]
 
-    slice_data = data[:, :, slice_index]
+    elif axis == "coronal":
+        if slice_index >= data.shape[1] or slice_index < 0:
+            raise HTTPException(status_code=400, detail="Geçersiz Coronal kesit")
+        slice_data = data[:, slice_index, :]
+
+    else:  # Varsayılan olarak "axial" kabul et
+        if slice_index >= data.shape[2] or slice_index < 0:
+            raise HTTPException(status_code=400, detail="Geçersiz Axial kesit")
+        slice_data = data[:, :, slice_index]
+
+    # --------------------------------------------------------
+    # GÖRÜNTÜYÜ NORMALIZE ET (0-255 ARASI) VE PNG'YE ÇEVİR
+    # --------------------------------------------------------
     if np.max(slice_data) > 0:
         slice_data = (slice_data - np.min(slice_data)) / (np.max(slice_data) - np.min(slice_data))
         slice_data = (slice_data * 255).astype(np.uint8)
     else:
         slice_data = slice_data.astype(np.uint8)
 
+    # NIfTI dosyaları matris olarak okunurken genelde 90 derece yatık gelir.
+    # Mevcut kodunuzdaki rotate(90) mantığını koruduk.
     img = Image.fromarray(slice_data).convert("L").rotate(90, expand=True)
+
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format="PNG")
     img_byte_arr.seek(0)
+
     return StreamingResponse(img_byte_arr, media_type="image/png")

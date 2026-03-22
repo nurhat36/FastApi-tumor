@@ -265,7 +265,8 @@
       <workItem from="1773690468982" duration="1795000" />
       <workItem from="1773756657316" duration="615000" />
       <workItem from="1773775792347" duration="2888000" />
-      <workItem from="1774087783372" duration="1059000" />
+      <workItem from="1774087783372" duration="5458000" />
+      <workItem from="1774206428245" duration="441000" />
     </task>
     <task id="LOCAL-00001" summary="stthdtr">
       <option name="closed" value="true" />
@@ -491,7 +492,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773776548975</updated>
     </task>
-    <option name="localTasksCounter" value="29" />
+    <task id="LOCAL-00029" summary="dosya yapısı ve database düzenlendi">
+      <option name="closed" value="true" />
+      <created>1774090212993</created>
+      <option name="number" value="00029" />
+      <option name="presentableId" value="LOCAL-00029" />
+      <option name="project" value="LOCAL" />
+      <updated>1774090212993</updated>
+    </task>
+    <option name="localTasksCounter" value="30" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
