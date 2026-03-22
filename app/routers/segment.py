@@ -116,70 +116,141 @@ def get_model():
 # ============================================================
 # 🎯 Segmentasyon Endpoint
 # ============================================================
+
+def segment_volume_nifti_with_roi(file_bytes, original_filename, current_user, axis, x, y, width, height, shape):
+    ext = ".nii.gz" if original_filename.endswith(".nii.gz") else ".nii"
+    temp_filename = f"temp_{uuid.uuid4().hex}{ext}"
+    temp_path = STATIC_MASKS_DIR / temp_filename
+
+    with open(temp_path, "wb") as f:
+        f.write(file_bytes)
+
+    nii = nib.load(str(temp_path))
+    volume = nii.get_fdata()
+    affine = nii.affine
+
+    # Çıktı için boş bir 3D hacim oluştur (Tümü 0)
+    mask_volume = np.zeros_like(volume, dtype=np.float64)
+
+    # Hangi eksende döneceğiz?
+    if axis == "sagittal":
+        loop_range = volume.shape[0]
+    elif axis == "coronal":
+        loop_range = volume.shape[1]
+    else:  # Varsayılan: axial
+        loop_range = volume.shape[2]
+
+    print(f"🧠 Segmentasyon Başladı: {loop_range} kesit {axis} ekseninde analiz edilecek...")
+
+    # BÜTÜN DİLİMLERİ (KESİTLERİ) DÖN
+    for i in range(loop_range):
+        # 1. Kesiti al
+        if axis == "sagittal":
+            slice_img = volume[i, :, :]
+        elif axis == "coronal":
+            slice_img = volume[:, i, :]
+        else:
+            slice_img = volume[:, :, i]
+
+        # 2. Normalize et
+        if np.max(slice_img) > 0:
+            slice_norm = (slice_img - np.min(slice_img)) / (np.max(slice_img) - np.min(slice_img))
+            slice_norm = (slice_norm * 255).astype(np.uint8)
+        else:
+            slice_norm = slice_img.astype(np.uint8)
+
+        # 3. Flutter'daki açıyla eşleşmesi için 90 derece döndür
+        pil_slice = Image.fromarray(slice_norm).convert("L").rotate(90, expand=True)
+        original_size = pil_slice.size
+
+        # 4. Modeli çalıştır
+        IMG_SIZE = 128
+        image_resized = pil_slice.resize((IMG_SIZE, IMG_SIZE))
+        image_np = np.array(image_resized, dtype=np.float32) / 255.0
+        image_np = np.expand_dims(image_np, axis=-1)
+        image_np = np.expand_dims(image_np, axis=0)
+
+        prediction = model.predict(image_np, verbose=0)[0]  # verbose=0 log kirliliğini önler
+
+        if prediction.ndim == 3 and prediction.shape[-1] > 1:
+            prediction = prediction[..., 0]
+
+        prediction_mask = (prediction > 0.5).astype(np.uint8) * 255
+        if prediction_mask.ndim == 3 and prediction_mask.shape[-1] == 1:
+            prediction_mask = np.squeeze(prediction_mask, axis=-1)
+
+        prediction_mask_resized = cv2.resize(prediction_mask, original_size)
+
+        # 5. KULLANICININ SEÇTİĞİ ALANI (ROI) UYGULA (Sadece o alanı bırak, gerisini sil)
+        if width > 0 and height > 0:
+            roi_mask = Image.new("L", original_size, 0)
+            draw = ImageDraw.Draw(roi_mask)
+            if shape == "rectangle":
+                draw.rectangle([x, y, x + width, y + height], fill=255)
+            elif shape in ["circle", "oval"]:
+                draw.ellipse([x, y, x + width, y + height], fill=255)
+
+            roi_mask_np = np.array(roi_mask)
+            prediction_mask_resized = cv2.bitwise_and(prediction_mask_resized, roi_mask_np)
+
+        # 6. Kesiti eski NIfTI açısına döndür (-90)
+        final_mask_pil = Image.fromarray(prediction_mask_resized).rotate(-90, expand=True)
+        final_mask_np = np.array(final_mask_pil).astype(np.float64) / 255.0
+
+        # 7. Oluşan maskeyi 3D hacimdeki yerine koy
+        if axis == "sagittal":
+            mask_volume[i, :, :] = final_mask_np
+        elif axis == "coronal":
+            mask_volume[:, i, :] = final_mask_np
+        else:
+            mask_volume[:, :, i] = final_mask_np
+
+    # Tüm dilimler bitti, 3D dosyayı kaydet
+    timestamp = int(time.time())
+    mask_filename = f"mask_volume_user{current_user.id}_{timestamp}.nii.gz"
+    mask_save_path = STATIC_MASKS_DIR / mask_filename
+
+    mask_nifti = nib.Nifti1Image(mask_volume, affine)
+    nib.save(mask_nifti, str(mask_save_path))
+
+    os.remove(temp_path)
+    return mask_filename
 # ============================================================
 # 🎯 Segmentasyon Endpoint (YENİ MİMARİ)
 # ============================================================
 @router.post("/segment/{file_id}")
 async def predict_image(
-    file_id: int,
-    x: float = Form(0),
-    y: float = Form(0),
-    width: float = Form(0),
-    height: float = Form(0),
-    shape: str = Form("rectangle"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        file_id: int,
+        x: float = Form(0),
+        y: float = Form(0),
+        width: float = Form(0),
+        height: float = Form(0),
+        shape: str = Form("rectangle"),
+        axis: str = Form("axial"),  # YENİ: Hangi eksenden seçildi?
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     try:
-        # ------------------------------------------------------------
-        # 🔹 1. File kaydını bul + yetki kontrolü
-        # ------------------------------------------------------------
-        file_record = (
-            db.query(DBFile)
-            .join(DBFile.patient)
-            .filter(
-                DBFile.id == file_id,
-                Patient.owner_id == current_user.id
-            )
-            .first()
-        )
-
-        if not file_record:
+        file_record = db.query(DBFile).join(DBFile.patient).filter(DBFile.id == file_id,
+                                                                   Patient.owner_id == current_user.id).first()
+        if not file_record or not os.path.exists(file_record.file_path):
             raise HTTPException(status_code=404, detail="Dosya bulunamadı.")
 
-        if not os.path.exists(file_record.file_path):
-            raise HTTPException(status_code=404, detail="Orijinal dosya diskte yok.")
-
-        # ------------------------------------------------------------
-        # 🔹 2. Dosyayı oku
-        # ------------------------------------------------------------
         with open(file_record.file_path, "rb") as f:
             contents = f.read()
 
-        # ============================================================
         # 🔥 NIFTI VOLUME SEGMENTATION
-        # ============================================================
         if file_record.file_path.endswith((".nii", ".nii.gz")):
-
-            mask_filename = segment_volume_nifti(
-                contents,
-                file_record.filename,
-                current_user
+            # Seçili alanla birlikte TÜM hacmi analiz et
+            mask_filename = segment_volume_nifti_with_roi(
+                contents, file_record.filename, current_user,
+                axis, x, y, width, height, shape
             )
 
             mask_save_path = STATIC_MASKS_DIR / mask_filename
-
-            # --------------------------------------------------------
-            # 🗄 Mask DB kaydı (file_id ile bağlı!)
-            # --------------------------------------------------------
-            mask_record = Mask(
-                filename=mask_filename,
-                file_path=str(mask_save_path),
-                file_id=file_record.id
-            )
+            mask_record = Mask(filename=mask_filename, file_path=str(mask_save_path), file_id=file_record.id)
 
             file_record.status = "segmented"
-
             db.add(mask_record)
             db.commit()
             db.refresh(mask_record)
