@@ -218,15 +218,118 @@ def segment_volume_nifti_with_roi(file_bytes, original_filename, current_user, a
 # ============================================================
 # 🎯 Segmentasyon Endpoint (YENİ MİMARİ)
 # ============================================================
+def segment_volume_with_3d_roi(file_bytes, original_filename, current_user,
+                               ax_x, ax_y, ax_w, ax_h,
+                               cor_x, cor_y, cor_w, cor_h,
+                               sag_x, sag_y, sag_w, sag_h, shape):
+    ext = ".nii.gz" if original_filename.endswith(".nii.gz") else ".nii"
+    temp_filename = f"temp_{uuid.uuid4().hex}{ext}"
+    temp_path = STATIC_MASKS_DIR / temp_filename
+
+    with open(temp_path, "wb") as f:
+        f.write(file_bytes)
+
+    nii = nib.load(str(temp_path))
+    volume = nii.get_fdata()
+    affine = nii.affine
+
+    dimX, dimY, dimZ = volume.shape
+
+    # 1. BÜTÜN 3D HACMİ KAPSAYAN BİR KALIP OLUŞTUR (İçi full 1 dolu)
+    roi_3d = np.ones((dimX, dimY, dimZ), dtype=np.float64)
+
+    # 2. AXIAL (Üstten) Sınırlandırma
+    if ax_w > 0 and ax_h > 0:
+        mask2d = Image.new("L", (dimX, dimY), 0)
+        draw = ImageDraw.Draw(mask2d)
+        if shape == "rectangle":
+            draw.rectangle([ax_x, ax_y, ax_x + ax_w, ax_y + ax_h], fill=255)
+        elif shape in ["circle", "oval"]:
+            draw.ellipse([ax_x, ax_y, ax_x + ax_w, ax_y + ax_h], fill=255)
+        mask2d_np = np.array(mask2d.rotate(-90, expand=True)) / 255.0
+        for z in range(dimZ): roi_3d[:, :, z] *= mask2d_np
+
+    # 3. CORONAL (Önden) Sınırlandırma
+    if cor_w > 0 and cor_h > 0:
+        mask2d = Image.new("L", (dimX, dimZ), 0)
+        draw = ImageDraw.Draw(mask2d)
+        if shape == "rectangle":
+            draw.rectangle([cor_x, cor_y, cor_x + cor_w, cor_y + cor_h], fill=255)
+        elif shape in ["circle", "oval"]:
+            draw.ellipse([cor_x, cor_y, cor_x + cor_w, cor_y + cor_h], fill=255)
+        mask2d_np = np.array(mask2d.rotate(-90, expand=True)) / 255.0
+        for y in range(dimY): roi_3d[:, y, :] *= mask2d_np
+
+    # 4. SAGITTAL (Yandan) Sınırlandırma
+    if sag_w > 0 and sag_h > 0:
+        mask2d = Image.new("L", (dimY, dimZ), 0)
+        draw = ImageDraw.Draw(mask2d)
+        if shape == "rectangle":
+            draw.rectangle([sag_x, sag_y, sag_x + sag_w, sag_y + sag_h], fill=255)
+        elif shape in ["circle", "oval"]:
+            draw.ellipse([sag_x, sag_y, sag_x + sag_w, sag_y + sag_h], fill=255)
+        mask2d_np = np.array(mask2d.rotate(-90, expand=True)) / 255.0
+        for x in range(dimX): roi_3d[x, :, :] *= mask2d_np
+
+    # 5. YAPAY ZEKA ANALİZİ (Artık sadece Axial döngüsü yeterli)
+    pred_volume = np.zeros_like(volume, dtype=np.float64)
+
+    print("🧠 Segmentasyon Başladı. Optimizasyon devrede...")
+    for z in range(dimZ):
+        # MÜTHİŞ OPTİMİZASYON: Eğer bu dilimde ROI tamamen sıfırsa (kullanıcı alanı dışında kalıyorsa) Yapay Zekayı HİÇ ÇALIŞTIRMA! (Çok Hızlandırır)
+        if np.max(roi_3d[:, :, z]) == 0:
+            continue
+
+        slice_img = volume[:, :, z]
+        if np.max(slice_img) > 0:
+            slice_norm = (slice_img - np.min(slice_img)) / (np.max(slice_img) - np.min(slice_img))
+            slice_norm = (slice_norm * 255).astype(np.uint8)
+        else:
+            slice_norm = slice_img.astype(np.uint8)
+
+        pil_slice = Image.fromarray(slice_norm).convert("L").rotate(90, expand=True)
+        original_size = pil_slice.size
+
+        IMG_SIZE = 128
+        image_resized = pil_slice.resize((IMG_SIZE, IMG_SIZE))
+        image_np = np.array(image_resized, dtype=np.float32) / 255.0
+        image_np = np.expand_dims(image_np, axis=-1)
+        image_np = np.expand_dims(image_np, axis=0)
+
+        prediction = model.predict(image_np, verbose=0)[0]
+        if prediction.ndim == 3 and prediction.shape[-1] > 1:
+            prediction = prediction[..., 0]
+
+        prediction_mask = (prediction > 0.5).astype(np.uint8) * 255
+        if prediction_mask.ndim == 3 and prediction_mask.shape[-1] == 1:
+            prediction_mask = np.squeeze(prediction_mask, axis=-1)
+
+        prediction_mask_resized = cv2.resize(prediction_mask, original_size)
+        final_mask_pil = Image.fromarray(prediction_mask_resized).rotate(-90, expand=True)
+        pred_volume[:, :, z] = np.array(final_mask_pil).astype(np.float64) / 255.0
+
+    # 6. YAPAY ZEKANIN SONUÇLARINI, 3 BOYUTLU KALIBIMIZLA KESİŞTİR (Filtrele)
+    final_volume = pred_volume * roi_3d
+
+    # 7. KAYDET
+    timestamp = int(time.time())
+    mask_filename = f"mask_volume_user{current_user.id}_{timestamp}.nii.gz"
+    mask_save_path = STATIC_MASKS_DIR / mask_filename
+
+    mask_nifti = nib.Nifti1Image(final_volume, affine)
+    nib.save(mask_nifti, str(mask_save_path))
+
+    os.remove(temp_path)
+    return mask_filename
+
+
 @router.post("/segment/{file_id}")
 async def predict_image(
         file_id: int,
-        x: float = Form(0),
-        y: float = Form(0),
-        width: float = Form(0),
-        height: float = Form(0),
+        ax_x: float = Form(0), ax_y: float = Form(0), ax_w: float = Form(0), ax_h: float = Form(0),
+        cor_x: float = Form(0), cor_y: float = Form(0), cor_w: float = Form(0), cor_h: float = Form(0),
+        sag_x: float = Form(0), sag_y: float = Form(0), sag_w: float = Form(0), sag_h: float = Form(0),
         shape: str = Form("rectangle"),
-        axis: str = Form("axial"),  # YENİ: Hangi eksenden seçildi?
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
 ):
@@ -241,10 +344,11 @@ async def predict_image(
 
         # 🔥 NIFTI VOLUME SEGMENTATION
         if file_record.file_path.endswith((".nii", ".nii.gz")):
-            # Seçili alanla birlikte TÜM hacmi analiz et
-            mask_filename = segment_volume_nifti_with_roi(
+            mask_filename = segment_volume_with_3d_roi(
                 contents, file_record.filename, current_user,
-                axis, x, y, width, height, shape
+                ax_x, ax_y, ax_w, ax_h,
+                cor_x, cor_y, cor_w, cor_h,
+                sag_x, sag_y, sag_w, sag_h, shape
             )
 
             mask_save_path = STATIC_MASKS_DIR / mask_filename
