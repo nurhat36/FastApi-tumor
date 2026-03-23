@@ -396,16 +396,18 @@ async def predict_image(
         prediction_mask_resized = cv2.resize(prediction_mask, original_size)
 
         # ------------------------------------------------------------
-        # 🔹 5. Kullanıcı ROI uygulaması
+        # 🔹 5. Kullanıcı ROI uygulaması (🔥 DÜZELTİLEN KISIM 🔥)
         # ------------------------------------------------------------
-        if width > 0 and height > 0:
+        # Normal 2D resimlerde çizimi 'axial' eksenine kaydettiğimiz için
+        # ax_w, ax_h, ax_x, ax_y değişkenlerini kullanıyoruz.
+        if ax_w > 0 and ax_h > 0:
             mask = Image.new("L", original_size, 0)
             draw = ImageDraw.Draw(mask)
 
             if shape == "rectangle":
-                draw.rectangle([x, y, x + width, y + height], fill=255)
+                draw.rectangle([ax_x, ax_y, ax_x + ax_w, ax_y + ax_h], fill=255)
             elif shape in ["circle", "oval"]:
-                draw.ellipse([x, y, x + width, y + height], fill=255)
+                draw.ellipse([ax_x, ax_y, ax_x + ax_w, ax_y + ax_h], fill=255)
 
             mask_np = np.array(mask)
             prediction_mask_resized = cv2.bitwise_and(
@@ -495,13 +497,17 @@ async def get_nifti_info(
 # ============================================================
 # 2. BELİRLİ BİR KESİTİ (SLICE) PNG OLARAK GETİR
 # ============================================================
+# ============================================================
+# 2. BELİRLİ BİR KESİTİ (SLICE) PNG OLARAK GETİR
+# ============================================================
 @router.get("/segment/nifti/{mask_id}/slice/{slice_index}")
 async def get_nifti_slice(
-    mask_id: int,
-    slice_index: int,
-    type: str = "mask",
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+        mask_id: int,
+        slice_index: int,
+        type: str = "mask",
+        axis: str = "axial",  # 🔥 YENİ: Hangi eksenden bakıldığını tutan parametre (Varsayılan: axial)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)
 ):
     mask_record = (
         db.query(Mask)
@@ -531,14 +537,28 @@ async def get_nifti_slice(
         nii = nib.load(target_path)
         data = nii.get_fdata()
 
-        if slice_index >= data.shape[2] or slice_index < 0:
-            raise HTTPException(status_code=400, detail="Geçersiz kesit numarası.")
+        # 🔥 YENİ: EKSENE GÖRE KESİTİ (DİLİMİ) AL
+        if axis == "sagittal":
+            if slice_index >= data.shape[0] or slice_index < 0:
+                raise HTTPException(status_code=400, detail="Geçersiz Sagittal kesit numarası.")
+            slice_data = data[slice_index, :, :]
 
-        slice_data = data[:, :, slice_index]
+        elif axis == "coronal":
+            if slice_index >= data.shape[1] or slice_index < 0:
+                raise HTTPException(status_code=400, detail="Geçersiz Coronal kesit numarası.")
+            slice_data = data[:, slice_index, :]
 
+        else:  # Varsayılan olarak "axial" (Üstten)
+            if slice_index >= data.shape[2] or slice_index < 0:
+                raise HTTPException(status_code=400, detail="Geçersiz Axial kesit numarası.")
+            slice_data = data[:, :, slice_index]
+
+        # --------------------------------------------------------
+        # Görüntü Normalizasyonu ve Döndürme (Mevcut kodunuz)
+        # --------------------------------------------------------
         if np.max(slice_data) > 0:
             slice_data = (slice_data - np.min(slice_data)) / (
-                np.max(slice_data) - np.min(slice_data)
+                    np.max(slice_data) - np.min(slice_data)
             )
             slice_data = (slice_data * 255).astype(np.uint8)
         else:
