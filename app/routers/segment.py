@@ -4,7 +4,7 @@ import os
 import shutil
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from multipart import file_path
+
 from sqlalchemy import Double
 from starlette.responses import JSONResponse
 from PIL import Image, ImageDraw
