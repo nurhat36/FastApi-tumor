@@ -25,11 +25,11 @@ app.add_middleware(
 # Router'ı dahil et
 Base.metadata.create_all(bind=engine)
 
-app.include_router(auth.router)
-app.include_router(segment.router)
-app.include_router(patients.router)
-app.include_router(file.router)
-
-app.include_router(mask.router)
+# DEĞİŞTİRİLEN KISIM: Hepsine prefix="/api" eklendi
+app.include_router(auth.router, prefix="/api")
+app.include_router(segment.router, prefix="/api")
+app.include_router(patients.router, prefix="/api")
+app.include_router(file.router, prefix="/api")
+app.include_router(mask.router, prefix="/api")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
